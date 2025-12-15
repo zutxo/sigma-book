@@ -1,5 +1,29 @@
 # The Sigma Book
 
+> ## KYA: Know Your Assumptions
+>
+> **This is a PRE-ALPHA version of The Sigma Book.**
+>
+> Before using this material, understand these critical assumptions:
+>
+> 1. **Not Authoritative**: This book is NOT an official specification. It is a research and educational resource derived from studying the source code.
+>
+> 2. **May Contain Errors**: Content has not been formally verified. Implementations based solely on this book may be incorrect.
+>
+> 3. **Subject to Change**: As a pre-alpha work, chapters may be incomplete, reorganized, or substantially rewritten.
+>
+> 4. **Source of Truth**: For authoritative information, always consult:
+>    - [sigmastate-interpreter](https://github.com/ScorexFoundation/sigmastate-interpreter) — Reference Scala implementation
+>    - [sigma-rust](https://github.com/ergoplatform/sigma-rust) — Rust implementation
+>    - [ergo](https://github.com/ergoplatform/ergo) — Ergo node
+>    - [ErgoTree Specification (spec.pdf)](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/spec/spec.pdf)
+>
+> 5. **Verification Required**: Cross-reference all claims against the actual source code before relying on them.
+>
+> **Use this book to learn and explore, but verify everything against the source.**
+
+---
+
 ## Complete Technical Reference for SigmaState Interpreter
 
 Welcome to **The Sigma Book**, a comprehensive technical reference covering the SigmaState interpreter, ErgoTrees, and the Sigma language. This book is written for engineers who need deep understanding of the implementation details, algorithms, and data structures behind the Ergo blockchain's smart contract system.

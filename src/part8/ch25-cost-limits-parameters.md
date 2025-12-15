@@ -1,5 +1,11 @@
 # Chapter 25: Cost Limits and Parameters
 
+> **PRE-ALPHA WARNING**: This is a pre-alpha version of The Sigma Book. Content may be incomplete, inaccurate, or subject to change. Do not use as a source of truth. For authoritative information, consult the official repositories:
+> - [sigmastate-interpreter](https://github.com/ScorexFoundation/sigmastate-interpreter) — Reference Scala implementation
+> - [sigma-rust](https://github.com/ergoplatform/sigma-rust) — Rust implementation
+> - [ergo](https://github.com/ergoplatform/ergo) — Ergo node
+
+
 ## Prerequisites
 
 - Transaction validation ([Chapter 24](./ch24-transaction-validation.md))

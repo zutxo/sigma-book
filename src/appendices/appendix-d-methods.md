@@ -1,5 +1,11 @@
 # Appendix D: Method Reference
 
+> **PRE-ALPHA WARNING**: This is a pre-alpha version of The Sigma Book. Content may be incomplete, inaccurate, or subject to change. Do not use as a source of truth. For authoritative information, consult the official repositories:
+> - [sigmastate-interpreter](https://github.com/ScorexFoundation/sigmastate-interpreter) — Reference Scala implementation
+> - [sigma-rust](https://github.com/ergoplatform/sigma-rust) — Rust implementation
+> - [ergo](https://github.com/ergoplatform/ergo) — Ergo node
+
+
 Complete reference for all methods available on each type[^1][^2].
 
 ## Method Organization
