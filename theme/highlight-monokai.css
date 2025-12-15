@@ -1,0 +1,44 @@
+/* Custom syntax highlighting - clean and readable */
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #0550AE;  /* Deep blue - keywords */
+  font-weight: 600;
+}
+
+.hljs-type {
+  color: #0A7D70;  /* Teal - types */
+}
+
+.hljs-built_in {
+  color: #953800;  /* Burnt orange - built-in @functions */
+}
+
+.hljs-string,
+.hljs-symbol {
+  color: #0A3069;  /* Navy - strings */
+}
+
+.hljs-number {
+  color: #6F42C1;  /* Purple - numbers */
+}
+
+.hljs-literal {
+  color: #0550AE;  /* Blue - true/false/null */
+  font-weight: 600;
+}
+
+.hljs-comment {
+  color: #6E7781;  /* Gray - comments */
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-function .hljs-title {
+  color: #8250DF;  /* Violet - function names */
+  font-weight: 600;
+}
+
+.hljs-class .hljs-title {
+  color: #0A7D70;  /* Teal - struct/enum names */
+  font-weight: 600;
+}

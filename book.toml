@@ -1,0 +1,50 @@
+[book]
+title = "The Sigma Book"
+authors = ["ErgoTree Research"]
+description = "Complete Technical Reference for SigmaState Interpreter, ErgoTrees, and Sigma Language"
+src = "src"
+language = "en"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/zutxo/sigma-book"
+edit-url-template = "https://github.com/zutxo/sigma-book/edit/main/{path}"
+site-url = "/"
+cname = ""
+smart-punctuation = true
+mathjax-support = true
+additional-css = ["theme/highlight-monokai.css"]
+additional-js = []
+no-section-label = false
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js = true
+line-numbers = true
+runnable = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+copy-js = true
+
+[preprocessor.index]
+
+[preprocessor.links]
+
