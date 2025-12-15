@@ -1,8 +1,26 @@
 # The Sigma Book
 
 [![mdBook](https://img.shields.io/badge/mdBook-Documentation-blue)](https://rust-lang.github.io/mdBook/)
+[![Status](https://img.shields.io/badge/Status-Pre--Alpha-orange)](https://github.com/zutxo/sigma-book)
 
 **Complete Technical Reference for SigmaState Interpreter, ErgoTrees, and Sigma Language**
+
+> ### KYA: Know Your Assumptions
+>
+> **This is a PRE-ALPHA version.** Before using this material:
+>
+> 1. **Not Authoritative** — This is NOT an official specification. It is a research/educational resource.
+> 2. **May Contain Errors** — Content has not been formally verified.
+> 3. **Subject to Change** — Chapters may be incomplete or substantially rewritten.
+> 4. **Verify Everything** — Cross-reference against the source code.
+>
+> **Authoritative Sources:**
+> - [sigmastate-interpreter](https://github.com/ScorexFoundation/sigmastate-interpreter) — Reference Scala implementation
+> - [sigma-rust](https://github.com/ergoplatform/sigma-rust) — Rust implementation
+> - [ergo](https://github.com/ergoplatform/ergo) — Ergo node
+> - [ErgoTree Spec (spec.pdf)](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/spec/spec.pdf)
+
+---
 
 A comprehensive technical reference for engineers who need deep understanding of the implementation details, algorithms, and design decisions behind the Ergo blockchain's smart contract system.
 
@@ -54,10 +72,10 @@ The built book will be in the `book/` directory.
 
 This book is derived from:
 
-- **sigmastate-interpreter** — The reference Scala implementation
-- **Ergo node** — Full node implementation showing integration
-- **Formal specifications** — LaTeX documents and academic papers
-- **Test suites** — Comprehensive tests defining expected behavior
+- [sigmastate-interpreter](https://github.com/ScorexFoundation/sigmastate-interpreter) — Reference Scala implementation
+- [sigma-rust](https://github.com/ergoplatform/sigma-rust) — Rust implementation
+- [ergo](https://github.com/ergoplatform/ergo) — Full node implementation
+- [ErgoTree Specification](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/spec/spec.pdf) — Formal specification
 
 ## Contributing
 
