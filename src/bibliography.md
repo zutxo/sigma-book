@@ -4,52 +4,56 @@
 
 1. **sigmastate-interpreter Repository**
    - URL: https://github.com/ScorexFoundation/sigmastate-interpreter
-   - The reference Scala implementation
+   - Reference Scala implementation of the SigmaState interpreter
+   - Key packages: `sigma.ast`, `sigma.serialization`, `sigma.eval`, `sigma.crypto`
 
-2. **Ergo Node Repository**
+2. **sigma-rust Repository**
+   - URL: https://github.com/ergoplatform/sigma-rust
+   - Rust implementation of ErgoTree IR and interpreter
+   - Key crates: `ergotree-ir`, `ergotree-interpreter`, `ergo-lib`
+
+3. **Ergo Node Repository**
    - URL: https://github.com/ergoplatform/ergo
-   - Full node implementation
+   - Full node implementation in Scala
 
 ## Specifications
 
-3. **ErgoTree Specification** (spec.pdf)
-   - Location: `docs/spec/spec.pdf`
+4. **ErgoTree Specification** (spec.pdf)
+   - Location: `sigmastate-interpreter/docs/spec/spec.pdf`
    - Formal specification of ErgoTree format and semantics
 
-4. **ErgoScript Language Specification** (LangSpec.md)
-   - Location: `docs/LangSpec.md`
+5. **ErgoScript Language Specification** (LangSpec.md)
+   - Location: `sigmastate-interpreter/docs/LangSpec.md`
    - Informal language specification
 
-5. **Sigma Protocols Paper** (sigma.pdf)
-   - Location: `docs/wpaper/sigma.pdf`
+6. **Sigma Protocols Paper** (sigma.pdf)
+   - Location: `sigmastate-interpreter/docs/wpaper/sigma.pdf`
    - Formal specification of Sigma protocols
 
 ## Academic Papers
 
-6. **Sigmastate Protocols**
-   - Location: `docs/sigmastate_protocols/sigmastate_protocols.pdf`
+7. **Sigmastate Protocols**
+   - Location: `sigmastate-interpreter/docs/sigmastate_protocols/sigmastate_protocols.pdf`
    - Detailed protocol descriptions
 
-7. **Ergo Whitepaper**
-   - Location: `ergo/papers/whitepaper/`
+8. **Ergo Whitepaper**
    - Platform overview and design rationale
 
-8. **Ergo Yellow Paper**
-   - Location: `ergo/papers/yellow/`
+9. **Ergo Yellow Paper**
    - Technical specification
 
 ## External References
 
-9. **Schnorr Identification Protocol**
-   - Schnorr, C.P. (1991). Efficient signature generation by smart cards
+10. **Schnorr Identification Protocol**
+    - Schnorr, C.P. (1991). Efficient signature generation by smart cards
 
-10. **Fiat-Shamir Heuristic**
+11. **Fiat-Shamir Heuristic**
     - Fiat, A., & Shamir, A. (1986). How to prove yourself
 
-11. **secp256k1 Curve**
+12. **secp256k1 Curve**
     - Standards for Efficient Cryptography (SEC 2)
 
-12. **BLAKE2 Hash Function**
+13. **BLAKE2 Hash Function**
     - https://www.blake2.net/
 
 ---

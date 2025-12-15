@@ -1,324 +1,433 @@
 # Appendix E: Serialization Format Reference
 
-This appendix provides the reference for ErgoTree and value serialization formats.
-
-**Source**: `docs/spec/serialization.tex`, `data/shared/src/main/scala/sigma/serialization/`
+Complete reference for ErgoTree and value serialization formats[^1][^2].
 
 ## Integer Encoding
 
 ### VLQ (Variable-Length Quantity)
 
-Unsigned integers are encoded using VLQ with continuation bits:
-
 ```
+VLQ Encoding
+══════════════════════════════════════════════════════════════════
+
 Byte format: [C][D D D D D D D]
              |  |____________|
              |       |
              |       +-- 7 data bits
              +---------- Continuation bit (1 = more bytes follow)
+
+Examples:
+  0       → [0x00]                    (1 byte)
+  127     → [0x7F]                    (1 byte)
+  128     → [0x80, 0x01]              (2 bytes: 10000000 00000001)
+  16383   → [0xFF, 0x7F]              (2 bytes)
+  16384   → [0x80, 0x80, 0x01]        (3 bytes)
 ```
 
-**Encoding Rules**:
-- If value < 128: single byte, continuation bit = 0
-- Otherwise: 7 bits of value, continuation bit = 1, recurse with remaining bits
+```zig
+const VlqEncoder = struct {
+    /// Encode unsigned integer as VLQ
+    pub fn encodeU64(value: u64, writer: anytype) !void {
+        var v = value;
+        while (v >= 0x80) {
+            try writer.writeByte(@as(u8, @truncate(v)) | 0x80);
+            v >>= 7;
+        }
+        try writer.writeByte(@as(u8, @truncate(v)));
+    }
 
-**Examples**:
-| Value | Hex | Binary |
-|-------|-----|--------|
-| 0 | `00` | `00000000` |
-| 127 | `7F` | `01111111` |
-| 128 | `80 01` | `10000000 00000001` |
-| 255 | `FF 01` | `11111111 00000001` |
-| 300 | `AC 02` | `10101100 00000010` |
+    /// Decode VLQ to unsigned integer
+    pub fn decodeU64(reader: anytype) !u64 {
+        var result: u64 = 0;
+        var shift: u6 = 0;
+        while (true) {
+            const byte = try reader.readByte();
+            result |= @as(u64, byte & 0x7F) << shift;
+            if (byte & 0x80 == 0) break;
+            shift += 7;
+            if (shift > 63) return error.VlqOverflow;
+        }
+        return result;
+    }
+};
+```
 
 ### ZigZag Encoding
 
-Signed integers use ZigZag encoding before VLQ:
+```zig
+const ZigZag = struct {
+    /// Encode signed → unsigned (small negatives stay small)
+    pub fn encode32(n: i32) u32 {
+        return @bitCast((n << 1) ^ (n >> 31));
+    }
 
+    pub fn encode64(n: i64) u64 {
+        return @bitCast((n << 1) ^ (n >> 63));
+    }
+
+    /// Decode unsigned → signed
+    pub fn decode32(n: u32) i32 {
+        return @bitCast((n >> 1) ^ (~(n & 1) +% 1));
+    }
+
+    pub fn decode64(n: u64) i64 {
+        return @bitCast((n >> 1) ^ (~(n & 1) +% 1));
+    }
+};
+
+// Mapping: 0 → 0, -1 → 1, 1 → 2, -2 → 3, 2 → 4, ...
 ```
-ZigZag(n) = (n << 1) ^ (n >> 31)  // for 32-bit
-          = (n << 1) ^ (n >> 63)  // for 64-bit
-```
 
-**Mapping**:
-| Signed | Encoded |
-|--------|---------|
-| 0 | 0 |
-| -1 | 1 |
-| 1 | 2 |
-| -2 | 3 |
-| 2 | 4 |
-| ... | ... |
-
-## Type Serialization
+## Type Serialization[^3]
 
 ### Primitive Type Codes
 
-| Type | Code (Decimal) | Code (Hex) |
-|------|----------------|------------|
-| `SBoolean` | 1 | 0x01 |
-| `SByte` | 2 | 0x02 |
-| `SShort` | 3 | 0x03 |
-| `SInt` | 4 | 0x04 |
-| `SLong` | 5 | 0x05 |
-| `SBigInt` | 6 | 0x06 |
-| `SGroupElement` | 7 | 0x07 |
-| `SSigmaProp` | 8 | 0x08 |
-| `SUnsignedBigInt` | 9 | 0x09 |
+| Type | Dec | Hex | Zig |
+|------|-----|-----|-----|
+| SBoolean | 1 | 0x01 | `.boolean` |
+| SByte | 2 | 0x02 | `.byte` |
+| SShort | 3 | 0x03 | `.short` |
+| SInt | 4 | 0x04 | `.int` |
+| SLong | 5 | 0x05 | `.long` |
+| SBigInt | 6 | 0x06 | `.big_int` |
+| SGroupElement | 7 | 0x07 | `.group_element` |
+| SSigmaProp | 8 | 0x08 | `.sigma_prop` |
+| SUnsignedBigInt | 9 | 0x09 | `.unsigned_big_int` |
 
 ### Collection Types
 
-Collections are encoded as base type + embedded element type:
+```zig
+const TypeEncoder = struct {
+    const COLL_BASE: u8 = 12;      // 0x0C
+    const NESTED_COLL: u8 = 24;    // 0x18
+    const OPTION_BASE: u8 = 36;    // 0x24
 
+    /// Encode collection type
+    pub fn encodeColl(elem: SType) u8 {
+        if (elem.isPrimitive()) {
+            return COLL_BASE + elem.typeCode();
+        }
+        if (elem == .coll) {
+            return NESTED_COLL + elem.inner().typeCode();
+        }
+        // Non-embeddable: write COLL_BASE then element type separately
+        return COLL_BASE;
+    }
+};
 ```
-Coll[T] code = 12 + (embeddable_code(T) * offset)
-```
-
-**Embeddable offset**: 12 (0x0C)
-
-| Type | Code |
-|------|------|
-| `Coll[Byte]` | 12 + 2 = 14 |
-| `Coll[Int]` | 12 + 4 = 16 |
-| `Coll[Coll[Byte]]` | 24 + 2 = 26 |
 
 ### Non-Embeddable Types
 
-| Type | Code (Decimal) | Code (Hex) |
-|------|----------------|------------|
-| `SBox` | 99 | 0x63 |
-| `SAvlTree` | 100 | 0x64 |
-| `SContext` | 101 | 0x65 |
-| `SHeader` | 104 | 0x68 |
-| `SPreHeader` | 105 | 0x69 |
-| `SGlobal` | 106 | 0x6A |
+| Type | Dec | Hex |
+|------|-----|-----|
+| SBox | 99 | 0x63 |
+| SAvlTree | 100 | 0x64 |
+| SContext | 101 | 0x65 |
+| SHeader | 104 | 0x68 |
+| SPreHeader | 105 | 0x69 |
+| SGlobal | 106 | 0x6A |
 
-### Generic Type Format
-
-For types that don't fit the embeddable pattern:
-
-```
-[Type constructor code (1 byte)]
-[Type arguments (each recursively serialized)]
-```
-
-## ErgoTree Format
+## ErgoTree Format[^4]
 
 ### Header Byte
 
 ```
+ErgoTree Header
+══════════════════════════════════════════════════════════════════
+
 Bits: [V V V V][S][C][R][R]
       |______|  |  |  |__|
          |      |  |    |
          |      |  |    +-- Reserved (2 bits)
-         |      |  +------- Constant segregation flag
-         |      +---------- Size flag (has size bytes)
+         |      |  +------- Constant segregation (1 = segregated)
+         |      +---------- Size flag (1 = size bytes present)
          +----------------- Version (4 bits, 0-15)
+
+Version Mapping:
+  0 → ErgoTree v0 (protocol v3.x)
+  1 → ErgoTree v1 (protocol v4.x)
+  2 → ErgoTree v2 (protocol v5.x, JIT costing)
+  3 → ErgoTree v3 (protocol v6.x)
 ```
 
-**Version Values**:
-| Version | Protocol |
-|---------|----------|
-| 0 | v3.x (initial) |
-| 1 | v4.x |
-| 2 | v5.x (JIT) |
-| 3 | v6.x |
+```zig
+const ErgoTreeHeader = struct {
+    version: u4,
+    has_size: bool,
+    constant_segregation: bool,
 
-### Complete ErgoTree Structure
+    pub fn parse(byte: u8) ErgoTreeHeader {
+        return .{
+            .version = @truncate(byte >> 4),
+            .has_size = (byte & 0x08) != 0,
+            .constant_segregation = (byte & 0x04) != 0,
+        };
+    }
 
-```
-[Header (1 byte)]
-[Size (VLQ, optional if S=1)]
-[Complexity (VLQ, optional)]
-[Constants count (VLQ, if C=1)]
-[Constants (each: type + value)]
-[Root expression (serialized tree)]
-```
-
-### Constant Segregation
-
-When the constant segregation flag is set:
-
-1. All constants are collected and serialized first
-2. In the expression tree, constants are replaced with `ConstantPlaceholder` nodes
-3. Each placeholder contains an index into the constants array
-
-**ConstantPlaceholder format**:
-```
-[Opcode: 0x73 (1 byte)]
-[Index (VLQ)]
-[Type (serialized type)]
+    pub fn serialize(self: ErgoTreeHeader) u8 {
+        var result: u8 = @as(u8, self.version) << 4;
+        if (self.has_size) result |= 0x08;
+        if (self.constant_segregation) result |= 0x04;
+        return result;
+    }
+};
 ```
 
-## Value Serialization
+### Complete Structure
+
+```
+ErgoTree Wire Format
+══════════════════════════════════════════════════════════════════
+
+┌─────────┬──────────┬──────────────┬─────────────┬──────────────┐
+│ Header  │   Size   │  Constants   │ Complexity  │    Root      │
+│ 1 byte  │   VLQ    │    Array     │    VLQ      │ Expression   │
+│         │(optional)│  (if C=1)    │ (optional)  │              │
+└─────────┴──────────┴──────────────┴─────────────┴──────────────┘
+
+With constant segregation (C=1):
+┌─────────┬──────────┬───────────┬──────────────────────────────┐
+│ Header  │ # consts │ Constants │   Root (with placeholders)   │
+│         │   VLQ    │  [type +  │                              │
+│         │          │  value]*  │                              │
+└─────────┴──────────┴───────────┴──────────────────────────────┘
+```
+
+## Value Serialization[^5]
 
 ### Primitive Values
 
-| Type | Format |
-|------|--------|
-| `Boolean` | 0x00 (false) or 0x01 (true) |
-| `Byte` | 1 byte signed |
-| `Short` | ZigZag + VLQ |
-| `Int` | ZigZag + VLQ |
-| `Long` | ZigZag + VLQ |
-| `BigInt` | [Length (1 byte)][Bytes (big-endian, 2's complement)] |
+```zig
+const DataSerializer = struct {
+    pub fn serialize(value: Value, writer: anytype) !void {
+        switch (value) {
+            .boolean => |b| try writer.writeByte(if (b) 0x01 else 0x00),
+            .byte => |b| try writer.writeByte(@bitCast(b)),
+            .short => |s| try VlqEncoder.encodeI16(s, writer),
+            .int => |i| try VlqEncoder.encodeI32(i, writer),
+            .long => |l| try VlqEncoder.encodeI64(l, writer),
+            .big_int => |bi| try serializeBigInt(bi, writer),
+            .group_element => |ge| try ge.serializeCompressed(writer),
+            .sigma_prop => |sp| try serializeSigmaProp(sp, writer),
+            .coll => |c| try serializeColl(c, writer),
+            // ...
+        }
+    }
 
-### GroupElement
+    fn serializeBigInt(bi: BigInt256, writer: anytype) !void {
+        const bytes = bi.toBytesBigEndian();
+        // Skip leading zeros for signed representation
+        var start: usize = 0;
+        while (start < bytes.len - 1 and bytes[start] == 0) : (start += 1) {}
+        try writer.writeByte(@intCast(bytes.len - start));
+        try writer.writeAll(bytes[start..]);
+    }
+};
+```
 
-33 bytes (SEC1 compressed point encoding):
+### GroupElement (SEC1 Compressed)
 
 ```
-[Prefix (1 byte): 0x02 or 0x03][X coordinate (32 bytes)]
-```
+GroupElement Encoding (33 bytes)
+══════════════════════════════════════════════════════════════════
 
-Prefix indicates Y coordinate parity.
+┌────────────┬─────────────────────────────────────────────────────┐
+│   Prefix   │                 X Coordinate                        │
+│  (1 byte)  │                  (32 bytes)                         │
+├────────────┼─────────────────────────────────────────────────────┤
+│ 0x02 = Y   │                                                     │
+│    even    │              Big-endian X value                     │
+│ 0x03 = Y   │                                                     │
+│    odd     │                                                     │
+└────────────┴─────────────────────────────────────────────────────┘
+```
 
 ### SigmaProp
 
-```
-[Discriminator (1 byte)]
-[Data (varies by discriminator)]
-```
+```zig
+const SigmaPropSerializer = struct {
+    const PROVE_DLOG: u8 = 0xCD;
+    const PROVE_DHT: u8 = 0xCE;
+    const THRESHOLD: u8 = 0x98;
+    const AND: u8 = 0x96;
+    const OR: u8 = 0x97;
 
-**Discriminators**:
-| Value | Type | Data |
-|-------|------|------|
-| 0xCD | ProveDlog | GroupElement (33 bytes) |
-| 0xCE | ProveDHTuple | 4 × GroupElement (132 bytes) |
-| 0x98 | THRESHOLD | k, n, children... |
-| 0x96 | AND | children... |
-| 0x97 | OR | children... |
+    pub fn serialize(sp: SigmaBoolean, writer: anytype) !void {
+        switch (sp) {
+            .prove_dlog => |pk| {
+                try writer.writeByte(PROVE_DLOG);
+                try pk.serializeCompressed(writer);
+            },
+            .prove_dht => |dht| {
+                try writer.writeByte(PROVE_DHT);
+                try dht.g.serializeCompressed(writer);
+                try dht.h.serializeCompressed(writer);
+                try dht.u.serializeCompressed(writer);
+                try dht.v.serializeCompressed(writer);
+            },
+            .and_conj => |children| {
+                try writer.writeByte(AND);
+                try VlqEncoder.encodeU64(children.len, writer);
+                for (children) |child| try serialize(child, writer);
+            },
+            .or_conj => |children| {
+                try writer.writeByte(OR);
+                try VlqEncoder.encodeU64(children.len, writer);
+                for (children) |child| try serialize(child, writer);
+            },
+            .threshold => |t| {
+                try writer.writeByte(THRESHOLD);
+                try VlqEncoder.encodeU64(t.k, writer);
+                try VlqEncoder.encodeU64(t.children.len, writer);
+                for (t.children) |child| try serialize(child, writer);
+            },
+        }
+    }
+};
+```
 
 ### Collections
 
-```
-[Element count (VLQ)]
-[Element type (serialized type)]
-[Elements (each serialized)]
+```zig
+const CollSerializer = struct {
+    pub fn serialize(coll: Collection, writer: anytype) !void {
+        try VlqEncoder.encodeU64(coll.len, writer);
+        // Element type already encoded in type header
+        for (coll.items) |item| {
+            try DataSerializer.serialize(item, writer);
+        }
+    }
+
+    /// Optimized boolean collection (bit-packed)
+    pub fn serializeBoolColl(bools: []const bool, writer: anytype) !void {
+        try VlqEncoder.encodeU64(bools.len, writer);
+        var byte: u8 = 0;
+        var bit: u3 = 0;
+        for (bools) |b| {
+            if (b) byte |= @as(u8, 1) << bit;
+            bit +%= 1;
+            if (bit == 0) {
+                try writer.writeByte(byte);
+                byte = 0;
+            }
+        }
+        if (bools.len % 8 != 0) try writer.writeByte(byte);
+    }
+};
 ```
 
-**Special case for `Coll[Boolean]`**:
-```
-[Element count (VLQ)]
-[Bits packed into bytes, LSB first]
-```
+## Expression Serialization[^6]
 
-### Box
+### General Pattern
 
-```
-[Value (VLQ Long)]
-[ErgoTree (serialized)]
-[Tokens count (VLQ)]
-[Tokens: (token_id (32 bytes), amount (VLQ Long))*]
-[Creation height (VLQ Int)]
-[Registers R4-R9 (4 bits for presence flags, then values)]
-[Transaction ID (32 bytes)]
-[Output index (VLQ Short)]
-```
+```zig
+const ExprSerializer = struct {
+    pub fn serialize(expr: Expr, writer: anytype) !void {
+        // Write opcode
+        try writer.writeByte(@intFromEnum(expr.opCode()));
 
-## Expression Serialization
-
-### General Format
-
-```
-[Opcode (1 byte)]
-[Arguments (opcode-specific)]
-```
-
-### Common Patterns
-
-**Unary operations**:
-```
-[Opcode]
-[Operand (serialized expression)]
-```
-
-**Binary operations**:
-```
-[Opcode]
-[Left operand (serialized expression)]
-[Right operand (serialized expression)]
-```
-
-**Method calls**:
-```
-[Opcode: 0xDC]
-[Type ID (1 byte)]
-[Method ID (1 byte)]
-[Receiver (serialized expression)]
-[Arguments count (VLQ)]
-[Arguments (each serialized)]
+        // Write opcode-specific data
+        switch (expr) {
+            .val_use => |vu| try VlqEncoder.encodeU32(vu.id, writer),
+            .constant_placeholder => |cp| {
+                try VlqEncoder.encodeU32(cp.index, writer);
+                try TypeEncoder.serialize(cp.tpe, writer);
+            },
+            .bin_op => |bo| {
+                try serialize(bo.left.*, writer);
+                try serialize(bo.right.*, writer);
+            },
+            .method_call => |mc| {
+                try writer.writeByte(mc.type_code);
+                try writer.writeByte(mc.method_id);
+                try serialize(mc.receiver.*, writer);
+                try VlqEncoder.encodeU64(mc.args.len, writer);
+                for (mc.args) |arg| try serialize(arg.*, writer);
+            },
+            // ...
+        }
+    }
+};
 ```
 
 ### Block Expressions
 
-**ValDef** (value definition):
 ```
-[Opcode: 0xD6]
-[ID (VLQ)]
-[Value type (optional, context-dependent)]
-[Value expression]
-```
+Block Value Structure
+══════════════════════════════════════════════════════════════════
 
-**BlockValue**:
-```
-[Opcode: 0xD8]
-[Item count (VLQ)]
-[Items (ValDef or FunDef)*]
-[Result expression]
-```
+BlockValue:
+┌────────┬──────────┬─────────────────────┬───────────────────────┐
+│ 0xD8   │  count   │   ValDef items      │   Result expr         │
+│        │   VLQ    │                     │                       │
+└────────┴──────────┴─────────────────────┴───────────────────────┘
 
-**FuncValue** (lambda):
-```
-[Opcode: 0xD9]
-[Argument count (VLQ)]
-[Arguments (ID + type)*]
-[Body expression]
-```
+ValDef:
+┌────────┬────────┬────────────┬───────────────────────────────────┐
+│ 0xD6   │   ID   │   Type     │        RHS Expression             │
+│        │  VLQ   │ (optional) │                                   │
+└────────┴────────┴────────────┴───────────────────────────────────┘
 
-## Proof Serialization
-
-### Unchecked Tree
-
-Sigma proofs are serialized as trees:
-
-```
-[Root node (recursive)]
+FuncValue (Lambda):
+┌────────┬──────────┬─────────────────────┬───────────────────────┐
+│ 0xD9   │ arg cnt  │  Args (ID + type)   │   Body expr           │
+│        │   VLQ    │                     │                       │
+└────────┴──────────┴─────────────────────┴───────────────────────┘
 ```
 
-**Node format** (varies by proposition type):
-- **ProveDlog**: `[Commitment (33 bytes)][Response (32 bytes)]`
-- **ProveDHTuple**: `[Commitment (33 bytes)][Response (32 bytes)]`
-- **AND/OR**: `[Challenge (32 bytes)][Children*]`
-- **THRESHOLD**: `[Challenge (32 bytes)][Children*][Polynomial coefficients]`
-
-### Challenge Encoding
-
-Challenges are 32-byte scalars computed via Fiat-Shamir transformation:
-```
-challenge = BLAKE2b256(message || commitments || public_inputs)
-```
-
-## Size Limits
+## Size Limits[^7]
 
 | Limit | Value | Description |
 |-------|-------|-------------|
-| Max ErgoTree size | 4KB | Serialized tree bytes |
-| Max box size | 4KB | Total serialized box |
+| Max ErgoTree size | 4 KB | Serialized bytes |
+| Max box size | 4 KB | Total serialized |
 | Max constants | 255 | Per ErgoTree |
 | Max registers | 10 | R0-R9 |
-| Max tokens per box | 255 | Token types |
+| Max tokens/box | 255 | Token types |
 | Max BigInt bytes | 32 | 256 bits |
 
-## Deserialization Validation
+## Deserialization
 
-During deserialization, the following are validated:
+```zig
+const SigmaByteReader = struct {
+    reader: std.io.Reader,
+    constant_store: []const Constant,
+    version: ErgoTreeVersion,
 
-1. **Opcode validity**: Must be known or soft-fork compatible
-2. **Type consistency**: Types must match expected signatures
-3. **Size limits**: Collections, strings, BigInts within bounds
-4. **Structural validity**: Well-formed tree structure
-5. **Version compatibility**: Features match declared version
+    pub fn readVlqU64(self: *SigmaByteReader) !u64 {
+        return VlqEncoder.decodeU64(self.reader);
+    }
+
+    pub fn readType(self: *SigmaByteReader) !SType {
+        const code = try self.reader.readByte();
+        return TypeEncoder.decode(code, self);
+    }
+
+    pub fn readExpr(self: *SigmaByteReader) !Expr {
+        const opcode = try self.reader.readByte();
+        if (opcode <= 0x70) {
+            // Constant (type code in data region)
+            return try self.readConstantWithType(opcode);
+        }
+        return try ExprSerializer.deserialize(@enumFromInt(opcode), self);
+    }
+};
+```
 
 ---
+
 *[Previous: Appendix D](./appendix-d-methods.md) | [Next: Appendix F](./appendix-f-version-history.md)*
+
+[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/`
+
+[^2]: Rust: `ergotree-ir/src/serialization/sigma_byte_reader.rs:12-97`
+
+[^3]: Rust: `ergotree-ir/src/serialization/types.rs`
+
+[^4]: Rust: `ergotree-ir/src/ergo_tree.rs` (header parsing)
+
+[^5]: Rust: `ergotree-ir/src/serialization/data.rs`
+
+[^6]: Rust: `ergotree-ir/src/serialization/expr.rs`
+
+[^7]: Scala: `docs/spec/serialization.tex` (size limits)

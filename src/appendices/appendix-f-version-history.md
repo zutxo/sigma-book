@@ -1,8 +1,6 @@
 # Appendix F: Version History
 
-This appendix provides the version history of ErgoScript and the SigmaState interpreter.
-
-**Source**: `core/shared/src/main/scala/sigma/VersionContext.scala`, Language specification tests
+Version history of ErgoScript and the SigmaState interpreter[^1][^2].
 
 ## Protocol Versions Overview
 
@@ -15,17 +13,23 @@ This appendix provides the version history of ErgoScript and the SigmaState inte
 
 ## Version Context
 
-```scala
-case class VersionContext(
-  activatedVersion: Byte,  // Protocol version on network
-  ergoTreeVersion: Byte    // Version of currently executing script
-)
+```zig
+const VersionContext = struct {
+    activated_version: u8,  // Protocol version on network
+    ergo_tree_version: u8,  // Version of currently executing script
 
-object VersionContext {
-  val MaxSupportedScriptVersion: Byte = 3  // Supports 0, 1, 2, 3
-  val JitActivationVersion: Byte = 2       // v5.0 JIT activation
-  val V6SoftForkVersion: Byte = 3          // v6.0 soft-fork
-}
+    pub const MAX_SUPPORTED_SCRIPT_VERSION: u8 = 3; // Supports 0, 1, 2, 3
+    pub const JIT_ACTIVATION_VERSION: u8 = 2;       // v5.0 JIT activation
+    pub const V6_SOFT_FORK_VERSION: u8 = 3;         // v6.0 soft-fork
+
+    pub fn isJitActivated(self: VersionContext) bool {
+        return self.activated_version >= JIT_ACTIVATION_VERSION;
+    }
+
+    pub fn isV6Activated(self: VersionContext) bool {
+        return self.activated_version >= V6_SOFT_FORK_VERSION;
+    }
+};
 ```
 
 ## Version 1 (Initial - v3.x)
@@ -102,13 +106,7 @@ JIT: Actual costs computed during execution
 
 ### AOT to JIT Transition
 
-The transition happened at a specific block height:
-
-```scala
-def isJitActivated: Boolean = activatedVersion >= JitActivationVersion
-```
-
-Scripts created before JIT activation continue to work, but new scripts benefit from more accurate costing.
+The transition happened at a specific block height. Scripts created before JIT activation continue to work, but new scripts benefit from more accurate costing.
 
 ## Version 4 (v6.0 - Evolution)
 
@@ -166,17 +164,20 @@ This soft-fork adds significant new functionality.
 - `encodeNBits`, `decodeNBits`: Difficulty encoding
 - `powHit`: Autolykos2 PoW verification
 
-### Version Checks in Code
+### Version Checks
 
-```scala
-// Check for v6 features
-if (VersionContext.current.isV6Activated) {
-  // Use new features
-}
-
-// Check ErgoTree version
-if (VersionContext.current.isV3OrLaterErgoTreeVersion) {
-  // Use v6 methods
+```zig
+fn evaluateWithVersion(ctx: *VersionContext, expr: *const Expr) !Value {
+    if (ctx.isV6Activated()) {
+        // Use v6 methods and features
+        return try evalV6(expr);
+    } else if (ctx.isJitActivated()) {
+        // Use JIT costing
+        return try evalJit(expr);
+    } else {
+        // Legacy AOT path
+        return try evalAot(expr);
+    }
 }
 ```
 
@@ -193,14 +194,13 @@ All scripts created for earlier versions continue to work:
 
 ### Method Resolution by Version
 
-```scala
-// Methods available depend on ErgoTree version
-def methods: Seq[SMethod] = {
-  if (VersionContext.current.isV3OrLaterErgoTreeVersion) {
-    _v6Methods  // All methods including v6
-  } else {
-    _v5Methods  // Pre-v6 methods only
-  }
+```zig
+fn getMethods(ctx: *const VersionContext, type_code: u8) []const SMethod {
+    const container = getTypeCompanion(type_code);
+    if (ctx.isV6Activated()) {
+        return container.all_methods;  // All methods including v6
+    }
+    return container.v5_methods;  // Pre-v6 methods only
 }
 ```
 
@@ -208,11 +208,11 @@ def methods: Seq[SMethod] = {
 
 Unknown opcodes and methods in future versions are handled gracefully:
 
-```scala
-ValidationRules.CheckValidOpCode(opCode, vs) match {
-  case Validated => // Known opcode, proceed
-  case SoftForkable => // Unknown but allowed, return default
-  case Invalid => // Reject script
+```zig
+fn checkOpCode(opcode: u8, ctx: *const VersionContext) ValidationResult {
+    if (isKnownOpcode(opcode)) return .validated;
+    if (ctx.isSoftForkable(opcode)) return .soft_forkable;
+    return .invalid;
 }
 ```
 
@@ -262,4 +262,9 @@ These tests verify:
 - Backward compatibility is maintained
 
 ---
+
 *[Previous: Appendix E](./appendix-e-serialization.md) | [Back to Book](../SUMMARY.md)*
+
+[^1]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala`
+
+[^2]: Rust: `ergotree-ir/src/ergo_tree.rs` (ErgoTreeVersion)

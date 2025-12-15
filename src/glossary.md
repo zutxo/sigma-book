@@ -14,13 +14,19 @@
 
 ## C
 
-**Constant Segregation**: An optimization technique where constants are extracted from ErgoTree expressions and stored separately.
+**Constant Segregation**: Optimization where constants are extracted from ErgoTree expressions and stored in a separate array. Enables efficient script substitution without re-serializing the expression tree.
 
-**Context**: The execution environment containing blockchain state, transaction data, and input information.
+**Context**: Execution environment containing blockchain state (HEIGHT, headers), transaction data (INPUTS, OUTPUTS, dataInputs), and current input information (SELF).
+
+**Cost Accumulator**: Runtime tracker that sums operation costs and enforces the script cost limit.
 
 ## D
 
-**DLog (Discrete Logarithm)**: A cryptographic primitive based on the difficulty of computing discrete logarithms in finite groups.
+**Data Input**: Read-only box reference in a transaction. Provides data without being spent.
+
+**DHT (Diffie-Hellman Tuple)**: Four-element sigma protocol proving knowledge of secret x where u = g^x and v = h^x.
+
+**DLog (Discrete Logarithm)**: Sigma protocol proving knowledge of discrete logarithm. Given generator g and public key h = g^x, proves knowledge of x.
 
 ## E
 
@@ -42,11 +48,15 @@
 
 ## I
 
-**Interpreter**: The component that evaluates ErgoTree expressions.
+**Interpreter**: Component that evaluates ErgoTree expressions against a context to produce a SigmaBoolean result.
 
 ## J
 
 **JIT (Just-In-Time)**: Costing model where costs are calculated during execution. Used in ErgoTree version 2+.
+
+## O
+
+**OpCode**: Single-byte identifier for expression nodes in serialized ErgoTree. Values 0x01-0x70 encode constants; 0x71+ encode operations.
 
 ## P
 
@@ -78,7 +88,11 @@
 
 **Verifier**: Component that verifies cryptographic proofs.
 
-**VLQ**: Variable-Length Quantity encoding for integers.
+**VLQ**: Variable-Length Quantity encoding for unsigned integers. Uses 7 data bits per byte with continuation bit.
+
+## Z
+
+**ZigZag Encoding**: Maps signed integers to unsigned: 0→0, -1→1, 1→2, -2→3, etc. Keeps small negatives small for efficient VLQ encoding.
 
 ---
 *[Back to Contents](./SUMMARY.md)*
