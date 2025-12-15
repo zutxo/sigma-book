@@ -2,930 +2,825 @@
 
 ## Prerequisites
 
-- **Required knowledge**: ErgoTree structure (Chapter 3), Transaction validation (Chapter 24)
-- **Related concepts**: Prover implementation (Chapter 15), Cost model (Chapter 13)
-- **Prior chapters**: Chapter 26 (Wallet and Signing)
+- Transaction validation ([Chapter 24](../part8/ch24-transaction-validation.md))
+- Prover implementation ([Chapter 15](../part5/ch15-prover-implementation.md))
+- Wallet signing ([Chapter 26](../part8/ch26-wallet-signing.md))
 
 ## Learning Objectives
 
-- Understand the high-level SDK architecture
-- Master transaction building with the builder pattern
-- Learn the SigmaProver interface for signing
-- Understand the reduction pipeline
-- Work with JSON codecs for API integration
+- Understand SDK architecture for transaction building
+- Implement TxBuilder with builder pattern
+- Master the reduce-then-sign pipeline
+- Work with TransactionContext and BoxSelection
 
-## Source References
+## SDK Architecture
 
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/SigmaProver.scala`
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/ProverBuilder.scala`
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala`
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/ReducingInterpreter.scala`
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala`
-- `sdk/shared/src/main/scala/org/ergoplatform/sdk/JsonCodecs.scala`
-
-## Introduction
-
-The Sigma SDK provides high-level APIs for building and signing Ergo transactions. It abstracts away the complexity of the interpreter and cryptographic protocols, offering:
-
-1. **Builder pattern** for constructing transactions
-2. **SigmaProver** for signing transactions
-3. **ReducingInterpreter** for script reduction without signing
-4. **JSON codecs** for API serialization
-
-## Architecture Overview
+The SDK provides a layered abstraction from low-level cryptography to high-level transaction building[^1][^2]:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Application Layer                          │
-├─────────────────────────────────────────────────────────────────┤
-│  UnsignedTransactionBuilder    ProverBuilder    JsonCodecs      │
-├─────────────────────────────────────────────────────────────────┤
-│           SigmaProver              ReducingInterpreter           │
-├─────────────────────────────────────────────────────────────────┤
-│              AppkitProvingInterpreter                            │
-├─────────────────────────────────────────────────────────────────┤
-│           ProverInterpreter    ReducingInterpreter               │
-├─────────────────────────────────────────────────────────────────┤
-│                    ErgoLikeInterpreter                           │
-└─────────────────────────────────────────────────────────────────┘
+SDK Layer Architecture
+══════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────┐
+│                     Application Layer                           │
+│   TxBuilder    BoxSelector    ErgoBoxCandidateBuilder          │
+├────────────────────────────────────────────────────────────────┤
+│                     Wallet Layer                                │
+│   Wallet    TransactionContext    TransactionHintsBag          │
+├────────────────────────────────────────────────────────────────┤
+│                     Reduction Layer                             │
+│   reduce_tx()    ReducedTransaction    ReducedInput            │
+├────────────────────────────────────────────────────────────────┤
+│                     Signing Layer                               │
+│   sign_transaction()    sign_reduced_transaction()             │
+├────────────────────────────────────────────────────────────────┤
+│                     Interpreter Layer                           │
+│   Prover    Verifier    reduce_to_crypto()                     │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-## Blockchain Context
-
-The SDK operates within a blockchain context that provides network state:
-
-```scala
-// From BlockchainContext.scala:14-22
-case class BlockchainContext(
-    networkType: NetworkType,
-    parameters: BlockchainParameters,
-    stateContext: BlockchainStateContext
-) {
-  def headers: Coll[Header] = stateContext.sigmaLastHeaders
-  def height: Int = headers(0).height
-}
-```
-
-### Blockchain Parameters
-
-Parameters control transaction validation costs:
-
-```scala
-// From BlockchainParameters.scala:6-29
-abstract class BlockchainParameters {
-  def storageFeeFactor: Int      // Storage cost per byte for 4 years
-  def minValuePerByte: Int       // Minimum nanoErgs per byte
-  def maxBlockSize: Int          // Maximum block size in bytes
-  def tokenAccessCost: Int       // Cost per token access
-  def inputCost: Int             // Cost per input (2000 default)
-  def dataInputCost: Int         // Cost per data input (100 default)
-  def outputCost: Int            // Cost per output (100 default)
-  def maxBlockCost: Int          // Block computation limit
-  def blockVersion: Byte         // Protocol version
-}
-```
-
-### SDK Constants
-
-```scala
-// From BlockchainParameters.scala:47-65
-object BlockchainParameters {
-  val MinerRewardDelay_Mainnet = 720  // Blocks before reward spendable
-  val MinerRewardDelay_Testnet = 720
-
-  val OneErg: Long = 1000 * 1000 * 1000       // 10^9 nanoErgs
-  val MinFee: Long = 1000 * 1000              // 0.001 ERG minimum
-  val MinChangeValue: Long = 1000 * 1000      // Below this, change → fee
-}
-```
-
-## Transaction Building
-
-### UnsignedTransactionBuilder
-
-The builder pattern for constructing transactions:
-
-```scala
-// From UnsignedTransactionBuilder.scala:20-28
-class UnsignedTransactionBuilder(val ctx: BlockchainContext) {
-  private[sdk] val _inputs: ArrayBuffer[ExtendedInputBox] = ArrayBuffer.empty
-  private[sdk] val _outputs: ArrayBuffer[OutBox] = ArrayBuffer.empty
-  private[sdk] val _dataInputs: ArrayBuffer[ErgoBox] = ArrayBuffer.empty
-
-  private var _tokensToBurn: Option[ArrayBuffer[ErgoToken]] = None
-  private var _feeAmount: Option[Long] = None
-  private var _changeAddress: Option[ErgoAddress] = None
-  private var _ph: Option[PreHeader] = None
-}
-```
-
-### Builder Methods
-
-Each method returns `this` for chaining:
-
-```scala
-// From UnsignedTransactionBuilder.scala:36-69
-def addInputs(boxes: ExtendedInputBox*): this.type = {
-  _inputs ++= boxes
-  this
-}
-
-def addDataInputs(boxes: ErgoBox*): this.type = {
-  _dataInputs ++= boxes
-  this
-}
-
-def addOutputs(outBoxes: OutBox*): this.type = {
-  _outputs ++= outBoxes
-  this
-}
-
-def fee(feeAmount: Long): this.type = {
-  require(_feeAmount.isEmpty, "Fee already defined")
-  _feeAmount = Some(feeAmount)
-  this
-}
-
-def addTokensToBurn(tokens: ErgoToken*): this.type = {
-  if (_tokensToBurn.isEmpty)
-    _tokensToBurn = Some(ArrayBuffer.empty)
-  _tokensToBurn.get ++= tokens
-  this
-}
-
-def sendChangeTo(changeAddress: ErgoAddress): this.type = {
-  require(_changeAddress.isEmpty, "Change address is already specified")
-  _changeAddress = Some(changeAddress)
-  this
-}
-```
-
-### Building the Transaction
-
-```scala
-// From UnsignedTransactionBuilder.scala:79-111
-def build(): UnreducedTransaction = {
-  val boxesToSpend = _inputs.toIndexedSeq
-  val outputCandidates = _outputs.map(c => c.candidate).toIndexedSeq
-  require(!outputCandidates.isEmpty, "Output boxes are not specified")
-
-  val dataInputBoxes = _dataInputs.toIndexedSeq
-  val dataInputs = _dataInputs.map(box => DataInput(box.id)).toIndexedSeq
-  require(_feeAmount.isEmpty || _feeAmount.get >= BlockchainParameters.MinFee)
-
-  val changeAddress = getDefined(_changeAddress, "Change address is not defined")
-  val requestedToBurn = _tokensToBurn.fold(IndexedSeq.empty[ErgoToken])(_.toIndexedSeq)
-  val burnTokens = SdkIsos.isoErgoTokenSeqToLinkedMap.to(requestedToBurn).toMap
-
-  val rewardDelay = ctx.networkType match {
-    case NetworkType.Mainnet => BlockchainParameters.MinerRewardDelay_Mainnet
-    case NetworkType.Testnet => BlockchainParameters.MinerRewardDelay_Testnet
-  }
-
-  val tx = UnsignedTransactionBuilder.buildUnsignedTx(
-    inputs = inputBoxesSeq, dataInputs = dataInputs,
-    outputCandidates = outputCandidates,
-    currentHeight = ctx.height, createFeeOutput = _feeAmount,
-    changeAddress = changeAddress, minChangeValue = MinChangeValue,
-    minerRewardDelay = rewardDelay, burnTokens = burnTokens
-  ).get
-
-  UnreducedTransaction(txWithExtensions, boxesToSpend, dataInputBoxes, requestedToBurn)
-}
-```
-
-### Stateless Validation
-
-Before building, stateless checks are performed:
-
-```scala
-// From UnsignedTransactionBuilder.scala:127-141
-private def validateStatelessChecks(
-    inputs: IndexedSeq[ErgoBox], dataInputs: IndexedSeq[DataInput],
-    outputCandidates: Seq[ErgoBoxCandidate]): Unit = {
-  require(inputs.nonEmpty, "inputs cannot be empty")
-  require(outputCandidates.nonEmpty, "outputCandidates cannot be empty")
-  require(inputs.size <= Short.MaxValue)
-  require(dataInputs.size <= Short.MaxValue)
-  require(outputCandidates.size <= Short.MaxValue)
-  require(outputCandidates.forall(_.value >= 0))
-  val outputSumTry = Try(outputCandidates.map(_.value).reduce(Math.addExact(_, _)))
-  require(outputSumTry.isSuccess, "Sum should not exceed Long.MaxValue")
-  require(inputs.distinct.size == inputs.size, "No duplicate inputs")
-}
-```
-
-## OutBox Builder
-
-For constructing output boxes:
-
-```scala
-// From OutBoxBuilder.scala:13-57
-class OutBoxBuilder(val _txB: UnsignedTransactionBuilder) {
-  private val _ctx = _txB.ctx
-  private var _value: Long = 0
-  private var _contract: ErgoTree = _
-  private val _tokens = ArrayBuffer.empty[ErgoToken]
-  private val _registers = ArrayBuffer.empty[Constant[_]]
-  private var _creationHeightOpt: Option[Int] = None
-
-  def value(value: Long): this.type = {
-    _value = value
-    this
-  }
-
-  def contract(contract: ErgoTree): this.type = {
-    _contract = contract
-    this
-  }
-
-  def tokens(tokens: ErgoToken*): this.type = {
-    require(tokens.nonEmpty, "At least one token should be specified")
-    val maxTokens = SigmaConstants.MaxTokens.value  // 255
-    require(tokens.size <= maxTokens)
-    _tokens ++= tokens
-    this
-  }
-
-  def registers(registers: Constant[_]*): this.type = {
-    require(registers.nonEmpty)
-    _registers.clear()
-    _registers ++= registers
-    this
-  }
-
-  def build(): OutBox = {
-    require(_contract != null, "Contract is not defined")
-    val ergoBoxCandidate = OutBoxBuilder.createBoxCandidate(
-      _value, _contract, _tokens.toSeq, _registers.toSeq,
-      creationHeight = _creationHeightOpt.getOrElse(_txB.ctx.height))
-    OutBox(ergoBoxCandidate)
-  }
-}
-```
-
-## Extended Input Box
-
-Input boxes with context extensions:
-
-```scala
-// From ExtendedInputBox.scala:15-21
-case class ExtendedInputBox(
-  box: ErgoBox,
-  extension: ContextExtension
-) {
-  def toUnsignedInput: UnsignedInput = new UnsignedInput(box.id, extension)
-  def value: Long = box.value
-}
-```
-
-## Transaction Data Types
-
-### UnreducedTransaction
-
-Before reduction (needs context for evaluation):
-
-```scala
-// From Transactions.scala:17-46
-case class UnreducedTransaction(
-    unsignedTx: UnsignedErgoLikeTransaction,
-    boxesToSpend: IndexedSeq[ExtendedInputBox],
-    dataInputs: IndexedSeq[ErgoBox],
-    tokensToBurn: IndexedSeq[ErgoToken]
-) {
-  require(unsignedTx.inputs.length == boxesToSpend.length)
-  require(unsignedTx.dataInputs.length == dataInputs.length)
-  // Validates box IDs match between tx and actual boxes
-}
-```
-
-### ReducedTransaction
-
-After reduction (can be signed without context):
-
-```scala
-// From Transactions.scala:48-65
-case class ReducedTransaction(ergoTx: ReducedErgoLikeTransaction) {
-  def toHex: String = {
-    val w = SigmaSerializer.startWriter()
-    ReducedErgoLikeTransactionSerializer.serialize(ergoTx, w)
-    w.toBytes.toHex
-  }
-}
-
-object ReducedTransaction {
-  def fromHex(hex: String): ReducedTransaction = {
-    val r = SigmaSerializer.startReader(hex.toBytes)
-    val tx = ReducedErgoLikeTransactionSerializer.parse(r)
-    ReducedTransaction(tx)
-  }
-}
-```
-
-### SignedTransaction
-
-Final signed transaction:
-
-```scala
-// From Transactions.scala:68
-case class SignedTransaction(ergoTx: ErgoLikeTransaction, cost: Int)
-```
-
-## Reducing Interpreter
-
-The `ReducingInterpreter` reduces scripts without signing:
-
-```scala
-// From ReducingInterpreter.scala:22-44
-class ReducingInterpreter(params: BlockchainParameters) extends ErgoLikeInterpreter {
-  override type CTX = ErgoLikeContext
-
-  def reduce(env: ScriptEnv, ergoTree: ErgoTree, context: CTX): ReducedInputData = {
-    val initCost = context.initCost
-    val remainingLimit = context.costLimit - initCost
-    if (remainingLimit <= 0)
-      throw new CostLimitException(
-        initCost,
-        s"Estimated execution cost $initCost exceeds the limit ${context.costLimit}"
-      )
-    val ctxUpdInitCost = context.withInitCost(initCost)
-    val res = fullReduction(ergoTree, ctxUpdInitCost, env)
-    ReducedInputData(res, ctxUpdInitCost.extension)
-  }
-}
-```
-
-### Transaction Reduction
-
-```scala
-// From ReducingInterpreter.scala:58-158
-def reduceTransaction(
-    unreducedTx: UnreducedTransaction,
-    stateContext: BlockchainStateContext,
-    baseCost: Int
-): ReducedTransaction = {
-  val unsignedTx = unreducedTx.unsignedTx
-  val boxesToSpend = unreducedTx.boxesToSpend
-  val dataBoxes = unreducedTx.dataInputs
-
-  // Validate token balances
-  val tokensToBurn = unreducedTx.tokensToBurn
-  val inputTokens = boxesToSpend.flatMap(_.box.additionalTokens.toArray)
-  val outputTokens = unsignedTx.outputCandidates.flatMap(_.additionalTokens.toArray)
-  val tokenDiff = JavaHelpers.subtractTokens(outputTokens, inputTokens)
-
-  if (tokenDiff.nonEmpty) {
-    val (toBurn, toMint) = tokenDiff.partition(_._2 < 0)
-    // Validate burning matches requested
-    // Validate only one token minted
-  }
-
-  // Calculate initial cost
-  val initialCost = ArithUtils.addExact(
-    Interpreter.interpreterInitCost,
-    boxesToSpend.size * params.inputCost,
-    dataBoxes.size * params.dataInputCost,
-    unsignedTx.outputCandidates.size * params.outputCost
-  )
-
-  val maxCost = params.maxBlockCost
-  var currentCost = addCostChecked(baseCost, initialCost, maxCost)
-
-  // Add token access costs
-  val (outAssets, outAssetsNum) = JavaHelpers.extractAssets(outputCandidates)
-  val (inAssets, inAssetsNum) = JavaHelpers.extractAssets(boxesToSpend.map(_.box))
-  val totalAssetsAccessCost = (outAssetsNum + inAssetsNum + inAssets.size + outAssets.size) *
-                              params.tokenAccessCost
-  currentCost = addCostChecked(currentCost, totalAssetsAccessCost, maxCost)
-
-  // Reduce each input
-  val reducedInputs = mutable.ArrayBuilder.make[ReducedInputData]
-  for ((inputBox, boxIdx) <- boxesToSpend.zipWithIndex) {
-    val context = new ErgoLikeContext(
-      AvlTreeData.avlTreeFromDigest(stateContext.previousStateDigest),
-      stateContext.sigmaLastHeaders,
-      stateContext.sigmaPreHeader,
-      transactionContext.dataBoxes,
-      transactionContext.boxesToSpend,
-      transactionContext.spendingTransaction,
-      boxIdx.toShort,
-      inputBox.extension,
-      ValidationRules.currentSettings,
-      costLimit = maxCost,
-      initCost = currentCost,
-      activatedScriptVersion = (params.blockVersion - 1).toByte
-    )
-
-    val reducedInput = reduce(Interpreter.emptyEnv, inputBox.box.ergoTree, context)
-    currentCost = reducedInput.reductionResult.cost
-    reducedInputs += reducedInput
-  }
-
-  ReducedTransaction(ReducedErgoLikeTransaction(
-    unsignedTx, reducedInputs.result(),
-    cost = (currentCost - baseCost).toIntExact
-  ))
-}
-```
-
-### ReducedInputData
-
-The result of script reduction:
-
-```scala
-// From AppkitProvingInterpreter.scala:274-275
-case class ReducedInputData(
-  reductionResult: ReductionResult,
-  extension: ContextExtension
-)
-```
-
-### ReducedErgoLikeTransaction
-
-Reduced transaction with sigma propositions:
-
-```scala
-// From AppkitProvingInterpreter.scala:283-289
-case class ReducedErgoLikeTransaction(
-  unsignedTx: UnsignedErgoLikeTransaction,
-  reducedInputs: Seq[ReducedInputData],
-  cost: Int
-) {
-  require(unsignedTx.inputs.length == reducedInputs.length)
-}
-```
-
-## SigmaProver
-
-High-level prover interface:
-
-```scala
-// From SigmaProver.scala (conceptual structure)
-class SigmaProver(_prover: AppkitProvingInterpreter, networkPrefix: NetworkPrefix) {
-
-  /** Get P2PK address for the first public key */
-  def getP2PKAddress: P2PKAddress = {
-    val pk = _prover.pubKeys(0)
-    P2PKAddress(pk)
-  }
-
-  /** Reduce and sign a transaction */
-  def sign(
-      stateCtx: BlockchainStateContext,
-      tx: UnreducedTransaction,
-      baseCost: Int
-  ): SignedTransaction
-
-  /** Sign an arbitrary message with a sigma proposition */
-  def signMessage(
-      sigmaProp: SigmaProp,
-      message: Array[Byte],
-      hintsBag: HintsBag
-  ): Array[Byte]
-
-  /** Reduce transaction without signing (for cold wallet) */
-  def reduce(
-      stateCtx: BlockchainStateContext,
-      tx: UnreducedTransaction,
-      baseCost: Int
-  ): ReducedTransaction
-
-  /** Sign an already-reduced transaction */
-  def signReduced(tx: ReducedTransaction): SignedTransaction
-}
-```
-
-## ProverBuilder
-
-Builder for creating SigmaProver instances:
-
-```scala
-// From ProverBuilder.scala:14-55
-class ProverBuilder(parameters: BlockchainParameters, networkPrefix: NetworkPrefix) {
-  private var _masterKey: Option[ExtendedSecretKey] = None
-  private val _eip3Secrets = mutable.ArrayBuilder.make[ExtendedSecretKey]
-  private val _dhtInputs = mutable.ArrayBuilder.make[DiffieHellmanTupleProverInput]
-  private val _dLogInputs = mutable.ArrayBuilder.make[DLogProverInput]
-
-  /** Configure with BIP-39 mnemonic phrase */
-  def withMnemonic(
-      mnemonicPhrase: SecretString,
-      mnemonicPass: SecretString,
-      usePre1627KeyDerivation: Boolean
-  ): ProverBuilder = {
-    _masterKey = Some(JavaHelpers.seedToMasterKey(
-      mnemonicPhrase, mnemonicPass, usePre1627KeyDerivation))
-    this
-  }
-
-  /** Add EIP-3 derived secret at given index */
-  def withEip3Secret(index: Int): ProverBuilder = {
-    require(_masterKey.isDefined, "Mnemonic is not defined")
-    val path = JavaHelpers.eip3DerivationWithLastIndex(index)
-    val secretKey = _masterKey.get.derive(path)
-    _eip3Secrets += secretKey
-    this
-  }
-
-  /** Add Diffie-Hellman tuple secret */
-  def withDHTData(
-      g: GroupElement, h: GroupElement,
-      u: GroupElement, v: GroupElement,
-      x: BigInteger
-  ): ProverBuilder = {
-    val dht = DiffieHellmanTupleProverInput(x, ProveDHTuple(g, h, u, v))
-    _dhtInputs += dht
-    this
-  }
-
-  /** Add discrete log secret */
-  def withDLogSecret(x: BigInteger): ProverBuilder = {
-    val dlog = DLogProverInput(x)
-    _dLogInputs += dlog
-    this
-  }
-
-  /** Build the prover */
-  def build(): SigmaProver = {
-    val interpreter = new AppkitProvingInterpreter(
-      _eip3Secrets.result(), _dLogInputs.result(),
-      _dhtInputs.result(), parameters)
-    new SigmaProver(interpreter, networkPrefix)
-  }
-}
-```
-
-## AppkitProvingInterpreter
-
-The core proving implementation:
-
-```scala
-// From AppkitProvingInterpreter.scala:34-55
-class AppkitProvingInterpreter(
-    val secretKeys: IndexedSeq[ExtendedSecretKey],
-    val dLogInputs: IndexedSeq[DLogProverInput],
-    val dhtInputs: IndexedSeq[DiffieHellmanTupleProverInput],
-    params: BlockchainParameters)
-  extends ReducingInterpreter(params) with ProverInterpreter {
-
-  override type CTX = ErgoLikeContext
-
-  /** All available secrets */
-  override val secrets: Seq[SigmaProtocolPrivateInput[_]] = {
-    val dlogs: IndexedSeq[DLogProverInput] = secretKeys.map(_.privateInput)
-    dlogs ++ dLogInputs ++ dhtInputs
-  }
-
-  /** Public keys for dlog secrets */
-  val pubKeys: Seq[ProveDlog] = secrets
-      .filter { case _: DLogProverInput => true case _ => false }
-      .map(_.asInstanceOf[DLogProverInput].publicImage)
-}
-```
-
-### Sign Method
-
-```scala
-// From AppkitProvingInterpreter.scala:81-95
-def sign(unreducedTx: UnreducedTransaction,
-         stateContext: BlockchainStateContext,
-         baseCost: Int): Try[SignedTransaction] = Try {
-  val maxCost = params.maxBlockCost
-  var currentCost: Long = baseCost
-
-  // First reduce
-  val reducedTx = reduceTransaction(unreducedTx, stateContext, baseCost)
-  currentCost = addCostLimited(currentCost, reducedTx.ergoTx.cost, maxCost)
-
-  // Then sign
-  val signedTx = signReduced(reducedTx, currentCost.toInt)
-  currentCost += signedTx.cost
-
-  val reductionAndVerificationCost = (currentCost - baseCost).toIntExact
-  signedTx.copy(cost = reductionAndVerificationCost)
-}
-```
-
-### Sign Reduced
-
-```scala
-// From AppkitProvingInterpreter.scala:220-244
-def signReduced(reducedTx: ReducedTransaction, baseCost: Int): SignedTransaction = {
-  val provedInputs = mutable.ArrayBuilder.make[Input]
-  val unsignedTx = reducedTx.ergoTx.unsignedTx
-
-  val maxCost = params.maxBlockCost
-  var currentCost: Long = baseCost
-
-  for ((reducedInput, boxIdx) <- reducedTx.ergoTx.reducedInputs.zipWithIndex) {
-    val unsignedInput = unsignedTx.inputs(boxIdx)
-
-    // Generate proof for this input
-    val proverResult = proveReduced(reducedInput, unsignedTx.messageToSign)
-    val signedInput = Input(unsignedInput.boxId, proverResult)
-
-    // Estimate verification cost
-    val verificationCost = estimateCryptoVerifyCost(
-      reducedInput.reductionResult.value).toBlockCost
-    currentCost = addCostLimited(currentCost, verificationCost, maxCost)
-
-    provedInputs += signedInput
-  }
-
-  val signedTx = new ErgoLikeTransaction(
-    provedInputs.result(), unsignedTx.dataInputs, unsignedTx.outputCandidates)
-
-  val txVerificationCost = (currentCost - baseCost).toIntExact
-  SignedTransaction(signedTx, txVerificationCost)
-}
-```
-
-### Prove Reduced
-
-```scala
-// From AppkitProvingInterpreter.scala:251-257
-def proveReduced(
-      reducedInput: ReducedInputData,
-      message: Array[Byte],
-      hintsBag: HintsBag = HintsBag.empty): ProverResult = {
-  val proof = generateProof(reducedInput.reductionResult.value, message, hintsBag)
-  new ProverResult(proof, reducedInput.extension)
-}
-```
-
-## JSON Codecs
-
-The SDK includes comprehensive JSON serialization:
-
-### Basic Type Codecs
-
-```scala
-// From JsonCodecs.scala:67-84
-implicit val arrayBytesEncoder: Encoder[Array[Byte]] =
-  Encoder.instance(ErgoAlgos.encode(_).asJson)
-implicit val arrayBytesDecoder: Decoder[Array[Byte]] =
-  bytesDecoder(x => x)
-
-implicit val collBytesEncoder: Encoder[Coll[Byte]] =
-  Encoder.instance(ErgoAlgos.encode(_).asJson)
-implicit val collBytesDecoder: Decoder[Coll[Byte]] =
-  bytesDecoder(Colls.fromArray(_))
-
-implicit val sigmaBigIntEncoder: Encoder[sigma.BigInt] = Encoder.instance({ bigInt =>
-  JsonNumber.fromDecimalStringUnsafe(
-    bigInt.asInstanceOf[WrapperOf[BigInteger]].wrappedValue.toString
-  ).asJson
-})
-```
-
-### ErgoTree Codec
-
-```scala
-// From JsonCodecs.scala:284-296
-implicit val ergoTreeEncoder: Encoder[ErgoTree] = Encoder.instance({ value =>
-  ErgoTreeSerializer.DefaultSerializer.serializeErgoTree(value).asJson
-})
-
-def decodeErgoTree[T](transform: ErgoTree => T): Decoder[T] =
-  Decoder.instance({ implicit cursor: ACursor =>
-    cursor.as[Array[Byte]] flatMap { bytes =>
-      fromThrows(transform(
-        ErgoTreeSerializer.DefaultSerializer.deserializeErgoTree(bytes)))
+## Transaction Builder
+
+The builder pattern constructs unsigned transactions with validation[^3][^4]:
+
+```zig
+const TxBuilder = struct {
+    box_selection: BoxSelection,
+    data_inputs: std.ArrayList(DataInput),
+    output_candidates: std.ArrayList(ErgoBoxCandidate),
+    current_height: u32,
+    fee_amount: BoxValue,
+    change_address: Address,
+    context_extensions: std.AutoHashMap(BoxId, ContextExtension),
+    token_burn_permit: std.ArrayList(Token),
+    allocator: Allocator,
+
+    pub fn init(
+        box_selection: BoxSelection,
+        output_candidates: []const ErgoBoxCandidate,
+        current_height: u32,
+        fee_amount: BoxValue,
+        change_address: Address,
+        allocator: Allocator,
+    ) !TxBuilder {
+        var outputs = std.ArrayList(ErgoBoxCandidate).init(allocator);
+        try outputs.appendSlice(output_candidates);
+
+        return .{
+            .box_selection = box_selection,
+            .data_inputs = std.ArrayList(DataInput).init(allocator),
+            .output_candidates = outputs,
+            .current_height = current_height,
+            .fee_amount = fee_amount,
+            .change_address = change_address,
+            .context_extensions = std.AutoHashMap(BoxId, ContextExtension).init(allocator),
+            .token_burn_permit = std.ArrayList(Token).init(allocator),
+            .allocator = allocator,
+        };
     }
-  })
+
+    pub fn deinit(self: *TxBuilder) void {
+        self.data_inputs.deinit();
+        self.output_candidates.deinit();
+        self.context_extensions.deinit();
+        self.token_burn_permit.deinit();
+    }
+
+    pub fn setDataInputs(self: *TxBuilder, data_inputs: []const DataInput) !void {
+        self.data_inputs.clearRetainingCapacity();
+        try self.data_inputs.appendSlice(data_inputs);
+    }
+
+    pub fn setContextExtension(self: *TxBuilder, box_id: BoxId, ext: ContextExtension) !void {
+        try self.context_extensions.put(box_id, ext);
+    }
+
+    pub fn setTokenBurnPermit(self: *TxBuilder, tokens: []const Token) !void {
+        self.token_burn_permit.clearRetainingCapacity();
+        try self.token_burn_permit.appendSlice(tokens);
+    }
+};
 ```
 
-### ErgoBox Codec
+## Build Validation
 
-```scala
-// From JsonCodecs.scala:309-340
-implicit val ergoBoxEncoder: Encoder[ErgoBox] = Encoder.instance({ box =>
-  Json.obj(
-    "boxId" -> box.id.asJson,
-    "value" -> box.value.asJson,
-    "ergoTree" -> ErgoTreeSerializer.DefaultSerializer
-                    .serializeErgoTree(box.ergoTree).asJson,
-    "assets" -> box.additionalTokens.toArray.toSeq.asJson,
-    "creationHeight" -> box.creationHeight.asJson,
-    "additionalRegisters" -> box.additionalRegisters.asJson,
-    "transactionId" -> box.transactionId.asJson,
-    "index" -> box.index.asJson
-  )
-})
+Building performs comprehensive validation before creating the transaction[^5][^6]:
 
-implicit val ergoBoxDecoder: Decoder[ErgoBox] = Decoder.instance({ cursor =>
-  for {
-    value <- cursor.downField("value").as[Long]
-    ergoTreeBytes <- cursor.downField("ergoTree").as[Array[Byte]]
-    additionalTokens <- cursor.downField("assets").as(Decoder.decodeSeq(assetDecoder))
-    creationHeight <- cursor.downField("creationHeight").as[Int]
-    additionalRegisters <- cursor.downField("additionalRegisters").as(registersDecoder)
-    transactionId <- cursor.downField("transactionId").as[ModifierId]
-    index <- cursor.downField("index").as[Short]
-  } yield new ErgoBox(value = value, ergoTree = ..., ...)
-})
+```zig
+pub fn build(self: *TxBuilder) !UnsignedTransaction {
+    // Validate inputs
+    if (self.box_selection.boxes.items.len == 0) {
+        return error.EmptyInputs;
+    }
+    if (self.output_candidates.items.len == 0) {
+        return error.EmptyOutputs;
+    }
+    if (self.box_selection.boxes.items.len > std.math.maxInt(u16)) {
+        return error.TooManyInputs;
+    }
+
+    // Check for duplicate inputs
+    var seen = std.AutoHashMap(BoxId, void).init(self.allocator);
+    defer seen.deinit();
+    for (self.box_selection.boxes.items) |box| {
+        const result = try seen.getOrPut(box.box_id);
+        if (result.found_existing) {
+            return error.DuplicateInputs;
+        }
+    }
+
+    // Build output candidates with change boxes
+    var all_outputs = try self.buildOutputCandidates();
+    defer all_outputs.deinit();
+
+    // Validate coin preservation
+    const total_in = sumValue(self.box_selection.boxes.items);
+    const total_out = sumValue(all_outputs.items);
+
+    if (total_out > total_in) {
+        return error.NotEnoughCoinsInInputs;
+    }
+    if (total_out < total_in) {
+        return error.NotEnoughCoinsInOutputs;
+    }
+
+    // Validate token balance
+    try self.validateTokenBalance(all_outputs.items);
+
+    // Create unsigned inputs with context extensions
+    var unsigned_inputs = std.ArrayList(UnsignedInput).init(self.allocator);
+    for (self.box_selection.boxes.items) |box| {
+        const ext = self.context_extensions.get(box.box_id) orelse
+            ContextExtension.empty();
+        try unsigned_inputs.append(.{
+            .box_id = box.box_id,
+            .extension = ext,
+        });
+    }
+
+    return UnsignedTransaction{
+        .inputs = try unsigned_inputs.toOwnedSlice(),
+        .data_inputs = try self.data_inputs.toOwnedSlice(),
+        .output_candidates = try all_outputs.toOwnedSlice(),
+    };
+}
+
+fn buildOutputCandidates(self: *TxBuilder) !std.ArrayList(ErgoBoxCandidate) {
+    var outputs = std.ArrayList(ErgoBoxCandidate).init(self.allocator);
+
+    // Add user-specified outputs
+    try outputs.appendSlice(self.output_candidates.items);
+
+    // Add change boxes from selection
+    const change_tree = try Contract.payToAddress(self.change_address);
+    for (self.box_selection.change_boxes.items) |change| {
+        var candidate = try ErgoBoxCandidateBuilder.init(
+            change.value,
+            change_tree,
+            self.current_height,
+            self.allocator,
+        );
+        for (change.tokens) |token| {
+            try candidate.addToken(token);
+        }
+        try outputs.append(try candidate.build());
+    }
+
+    // Add miner fee box
+    const fee_box = try newMinerFeeBox(self.fee_amount, self.current_height);
+    try outputs.append(fee_box);
+
+    return outputs;
+}
 ```
 
-### Transaction Codecs
+## Token Balance Validation
 
-```scala
-// From JsonCodecs.scala:368-383
-implicit val ergoLikeTransactionEncoder: Encoder[ErgoLikeTransaction] =
-  Encoder.instance({ tx =>
-    Json.obj(
-      "id" -> tx.id.asJson,
-      "inputs" -> tx.inputs.asJson,
-      "dataInputs" -> tx.dataInputs.asJson,
-      "outputs" -> tx.outputs.asJson
-    )
-  })
+Token flow must be explicitly validated[^7][^8]:
 
-implicit val ergoLikeTransactionDecoder: Decoder[ErgoLikeTransaction] =
-  Decoder.instance({ implicit cursor =>
-    for {
-      inputs <- cursor.downField("inputs").as[IndexedSeq[Input]]
-      dataInputs <- cursor.downField("dataInputs").as[IndexedSeq[DataInput]]
-      outputs <- cursor.downField("outputs").as[IndexedSeq[ErgoBoxCandidate]]
-    } yield new ErgoLikeTransaction(inputs, dataInputs, outputs)
-  })
+```zig
+fn validateTokenBalance(self: *TxBuilder, outputs: []const ErgoBoxCandidate) !void {
+    const input_tokens = try sumTokens(self.box_selection.boxes.items, self.allocator);
+    defer input_tokens.deinit();
+
+    const output_tokens = try sumTokens(outputs, self.allocator);
+    defer output_tokens.deinit();
+
+    // First input's box ID can be minted as new token
+    const first_input_id = TokenId.fromBoxId(self.box_selection.boxes.items[0].box_id);
+
+    // Filter out minted token from outputs
+    var minted_count: usize = 0;
+    var output_without_minted = std.AutoHashMap(TokenId, TokenAmount).init(self.allocator);
+    defer output_without_minted.deinit();
+
+    var iter = output_tokens.iterator();
+    while (iter.next()) |entry| {
+        if (entry.key_ptr.*.eql(first_input_id)) {
+            minted_count += 1;
+        } else {
+            try output_without_minted.put(entry.key_ptr.*, entry.value_ptr.*);
+        }
+    }
+
+    // Can only mint one token per transaction
+    if (minted_count > 1) {
+        return error.CannotMintMultipleTokens;
+    }
+
+    // Check all output tokens exist in inputs
+    var out_iter = output_without_minted.iterator();
+    while (out_iter.next()) |entry| {
+        const input_amt = input_tokens.get(entry.key_ptr.*) orelse {
+            return error.NotEnoughTokens;
+        };
+        if (input_amt < entry.value_ptr.*) {
+            return error.NotEnoughTokens;
+        }
+    }
+
+    // Check token burn permits
+    const burned = try subtractTokens(input_tokens, output_without_minted, self.allocator);
+    defer burned.deinit();
+
+    try self.checkBurnPermit(burned);
+}
+
+fn checkBurnPermit(self: *TxBuilder, burned: std.AutoHashMap(TokenId, TokenAmount)) !void {
+    // Build permit map
+    var permits = std.AutoHashMap(TokenId, TokenAmount).init(self.allocator);
+    defer permits.deinit();
+    for (self.token_burn_permit.items) |token| {
+        try permits.put(token.id, token.amount);
+    }
+
+    // Every burned token must have permit
+    var iter = burned.iterator();
+    while (iter.next()) |entry| {
+        const permit_amt = permits.get(entry.key_ptr.*) orelse {
+            return error.TokenBurnPermitMissing;
+        };
+        if (entry.value_ptr.* > permit_amt) {
+            return error.TokenBurnPermitExceeded;
+        }
+    }
+
+    // Every permit must be used exactly
+    var permit_iter = permits.iterator();
+    while (permit_iter.next()) |entry| {
+        const burned_amt = burned.get(entry.key_ptr.*) orelse {
+            return error.TokenBurnPermitUnused;
+        };
+        if (burned_amt < entry.value_ptr.*) {
+            return error.TokenBurnPermitUnused;
+        }
+    }
+}
 ```
 
-### Context Codec
+## Box Candidate Builder
 
-```scala
-// From JsonCodecs.scala:423-459
-implicit val ergoLikeContextEncoder: Encoder[ErgoLikeContext] =
-  Encoder.instance({ ctx =>
-    Json.obj(
-      "lastBlockUtxoRoot" -> ctx.lastBlockUtxoRoot.asJson,
-      "headers" -> ctx.headers.toArray.toSeq.asJson,
-      "preHeader" -> ctx.preHeader.asJson,
-      "dataBoxes" -> ctx.dataBoxes.asJson,
-      "boxesToSpend" -> ctx.boxesToSpend.asJson,
-      "spendingTransaction" -> ctx.spendingTransaction.asJson,
-      "selfIndex" -> ctx.selfIndex.asJson,
-      "extension" -> ctx.extension.asJson,
-      "validationSettings" -> ctx.validationSettings.asJson,
-      "costLimit" -> ctx.costLimit.asJson,
-      "initCost" -> ctx.initCost.asJson,
-      "scriptVersion" -> ctx.activatedScriptVersion.asJson
-    )
-  })
+Constructs output boxes with fluent API:
+
+```zig
+const ErgoBoxCandidateBuilder = struct {
+    value: BoxValue,
+    ergo_tree: ErgoTree,
+    creation_height: u32,
+    tokens: std.ArrayList(Token),
+    registers: [6]?Constant, // R4-R9
+    allocator: Allocator,
+
+    pub fn init(
+        value: BoxValue,
+        ergo_tree: ErgoTree,
+        creation_height: u32,
+        allocator: Allocator,
+    ) !ErgoBoxCandidateBuilder {
+        return .{
+            .value = value,
+            .ergo_tree = ergo_tree,
+            .creation_height = creation_height,
+            .tokens = std.ArrayList(Token).init(allocator),
+            .registers = [_]?Constant{null} ** 6,
+            .allocator = allocator,
+        };
+    }
+
+    pub fn addToken(self: *ErgoBoxCandidateBuilder, token: Token) !void {
+        if (self.tokens.items.len >= MAX_TOKENS) {
+            return error.TooManyTokens;
+        }
+        try self.tokens.append(token);
+    }
+
+    pub fn mintToken(
+        self: *ErgoBoxCandidateBuilder,
+        token: Token,
+        name: []const u8,
+        description: []const u8,
+        decimals: u8,
+    ) !void {
+        try self.addToken(token);
+        // Store metadata in R4-R6
+        self.registers[0] = Constant.fromBytes(name);
+        self.registers[1] = Constant.fromBytes(description);
+        self.registers[2] = Constant.fromByte(decimals);
+    }
+
+    pub fn setRegister(self: *ErgoBoxCandidateBuilder, reg: RegisterId, value: Constant) void {
+        const idx = @intFromEnum(reg) - 4; // R4 = 0, R5 = 1, etc.
+        self.registers[idx] = value;
+    }
+
+    pub fn build(self: *ErgoBoxCandidateBuilder) !ErgoBoxCandidate {
+        return ErgoBoxCandidate{
+            .value = self.value,
+            .ergo_tree = self.ergo_tree,
+            .creation_height = self.creation_height,
+            .tokens = try self.tokens.toOwnedSlice(),
+            .additional_registers = self.registers,
+        };
+    }
+};
+```
+
+## Transaction Context
+
+Bundles transaction with input boxes for signing[^9][^10]:
+
+```zig
+const TransactionContext = struct {
+    spending_tx: UnsignedTransaction,
+    input_boxes: []const ErgoBox,
+    data_boxes: ?[]const ErgoBox,
+
+    pub fn init(
+        spending_tx: UnsignedTransaction,
+        input_boxes: []const ErgoBox,
+        data_boxes: ?[]const ErgoBox,
+    ) !TransactionContext {
+        // Validate input boxes match transaction inputs
+        if (input_boxes.len != spending_tx.inputs.len) {
+            return error.InputBoxCountMismatch;
+        }
+
+        for (spending_tx.inputs, input_boxes) |input, box| {
+            if (!input.box_id.eql(box.box_id())) {
+                return error.InputBoxIdMismatch;
+            }
+        }
+
+        // Validate data boxes if present
+        if (spending_tx.data_inputs) |data_inputs| {
+            const data = data_boxes orelse return error.DataInputBoxNotFound;
+            if (data.len != data_inputs.len) {
+                return error.DataInputBoxCountMismatch;
+            }
+        }
+
+        return .{
+            .spending_tx = spending_tx,
+            .input_boxes = input_boxes,
+            .data_boxes = data_boxes,
+        };
+    }
+
+    pub fn getInputBox(self: *const TransactionContext, box_id: BoxId) ?*const ErgoBox {
+        for (self.input_boxes) |*box| {
+            if (box.box_id().eql(box_id)) {
+                return box;
+            }
+        }
+        return null;
+    }
+};
 ```
 
 ## Box Selection
 
-The SDK includes box selection for transaction building:
+Selects input boxes to satisfy output requirements[^11][^12]:
 
-```scala
-// From BoxSelectionResult.scala:12-15
-class BoxSelectionResult[T <: ErgoBoxAssets](
-    val inputBoxes: Seq[T],
-    val changeBoxes: Seq[ErgoBoxAssets],
-    val payToReemissionBox: Option[ErgoBoxAssets]  // EIP-27
-)
-```
+```zig
+const BoxSelection = struct {
+    boxes: std.ArrayList(ErgoBox),
+    change_boxes: std.ArrayList(ErgoBoxAssets),
 
-## Token Balance Exception
+    const ErgoBoxAssets = struct {
+        value: BoxValue,
+        tokens: []const Token,
+    };
+};
 
-For token mismatch errors:
+const SimpleBoxSelector = struct {
+    pub fn select(
+        available: []const ErgoBox,
+        target_value: BoxValue,
+        target_tokens: []const Token,
+        allocator: Allocator,
+    ) !BoxSelection {
+        var selected = std.ArrayList(ErgoBox).init(allocator);
+        var total_value: u64 = 0;
+        var token_sums = std.AutoHashMap(TokenId, TokenAmount).init(allocator);
+        defer token_sums.deinit();
 
-```scala
-// From AppkitProvingInterpreter.scala:264-267
-case class TokenBalanceException(
-  message: String,
-  tokensDiff: TokenColl
-) extends Exception(s"Input and output tokens are not balanced: $message")
-```
+        // Greedy selection
+        for (available) |box| {
+            const needed = checkNeed(total_value, target_value, token_sums, target_tokens);
+            if (!needed) break;
 
-## Usage Example
+            try selected.append(box);
+            total_value += box.value.as_u64();
 
-Complete transaction building and signing:
+            for (box.tokens) |token| {
+                const entry = try token_sums.getOrPut(token.id);
+                if (entry.found_existing) {
+                    entry.value_ptr.* = try entry.value_ptr.*.checkedAdd(token.amount);
+                } else {
+                    entry.value_ptr.* = token.amount;
+                }
+            }
+        }
 
-```scala
-import org.ergoplatform.sdk._
+        // Calculate change
+        var change_boxes = std.ArrayList(BoxSelection.ErgoBoxAssets).init(allocator);
+        const change_value = total_value - target_value.as_u64();
+        if (change_value > 0) {
+            const change_tokens = try calculateChangeTokens(token_sums, target_tokens, allocator);
+            try change_boxes.append(.{
+                .value = BoxValue.init(change_value) catch return error.ChangeValueTooSmall,
+                .tokens = change_tokens,
+            });
+        }
 
-// Create blockchain context
-val ctx = BlockchainContext(
-  NetworkType.Mainnet,
-  parameters,
-  stateContext
-)
-
-// Build prover
-val prover = new ProverBuilder(parameters, NetworkPrefix.Mainnet)
-  .withMnemonic(mnemonic, password, usePre1627KeyDerivation = false)
-  .withEip3Secret(0)
-  .build()
-
-// Build transaction
-val tx = new UnsignedTransactionBuilder(ctx)
-  .addInputs(inputBox1, inputBox2)
-  .addOutputs(
-    ctx.outBoxBuilder
-      .value(1000000000L)  // 1 ERG
-      .contract(recipientTree)
-      .build()
-  )
-  .fee(BlockchainParameters.MinFee)
-  .sendChangeTo(changeAddress)
-  .build()
-
-// Sign transaction
-val signedTx = prover.sign(ctx.stateContext, tx, baseCost = 0)
-println(s"Signed TX cost: ${signedTx.cost}")
-```
-
-### Cold Wallet Flow
-
-Using reduction for air-gapped signing:
-
-```scala
-// On hot wallet: reduce transaction
-val reducedTx = prover.reduce(stateContext, unreducedTx, baseCost = 0)
-val reducedHex = reducedTx.toHex
-
-// Transfer hex string to cold wallet (QR code, USB, etc.)
-
-// On cold wallet: sign reduced transaction
-val reducedTx = ReducedTransaction.fromHex(reducedHex)
-val signedTx = coldProver.signReduced(reducedTx)
-```
-
-## Serialization of Reduced Transactions
-
-For cold wallet workflows:
-
-```scala
-// From AppkitProvingInterpreter.scala:292-336
-object ReducedErgoLikeTransactionSerializer
-  extends SigmaSerializer[ReducedErgoLikeTransaction, ReducedErgoLikeTransaction] {
-
-  override def serialize(tx: ReducedErgoLikeTransaction, w: SigmaByteWriter): Unit = {
-    val msg = tx.unsignedTx.messageToSign
-    w.putUInt(msg.length)
-    w.putBytes(msg)
-
-    val nInputs = tx.reducedInputs.length
-    cfor(0)(_ < nInputs, _ + 1) { i =>
-      val input = tx.reducedInputs(i)
-      SigmaBoolean.serializer.serialize(input.reductionResult.value, w)
-      w.putULong(input.reductionResult.cost)
+        return .{
+            .boxes = selected,
+            .change_boxes = change_boxes,
+        };
     }
-    w.putUInt(tx.cost)
-  }
+};
+```
 
-  override def parse(r: SigmaByteReader): ReducedErgoLikeTransaction = {
-    val nBytes = r.getUInt()
-    val msg = r.getBytes(nBytes.toIntExact)
-    val tx = ErgoLikeTransactionSerializer.parse(SigmaSerializer.startReader(msg))
+## Reduced Transaction
 
-    val nInputs = tx.inputs.length
-    val reducedInputs = new Array[ReducedInputData](nInputs)
-    val unsignedInputs = new Array[UnsignedInput](nInputs)
+Script reduction separates evaluation from signing[^13][^14]:
 
-    cfor(0)(_ < nInputs, _ + 1) { i =>
-      val sb = SigmaBoolean.serializer.parse(r)
-      val cost = r.getULong()
-      val input = tx.inputs(i)
-      val extension = input.extension
-      val reductionResult = ReductionResult(sb, cost)
-      reducedInputs(i) = ReducedInputData(reductionResult, extension)
-      unsignedInputs(i) = new UnsignedInput(input.boxId, extension)
+```zig
+const ReducedInput = struct {
+    sigma_prop: SigmaBoolean,
+    cost: u64,
+    extension: ContextExtension,
+};
+
+const ReducedTransaction = struct {
+    unsigned_tx: UnsignedTransaction,
+    reduced_inputs: []const ReducedInput,
+    tx_cost: u32,
+
+    pub fn reducedInputs(self: *const ReducedTransaction) []const ReducedInput {
+        return self.reduced_inputs;
+    }
+};
+
+/// Reduce transaction inputs to sigma propositions
+pub fn reduceTx(
+    tx_context: TransactionContext,
+    state_context: *const ErgoStateContext,
+    allocator: Allocator,
+) !ReducedTransaction {
+    var reduced_inputs = std.ArrayList(ReducedInput).init(allocator);
+
+    for (tx_context.spending_tx.inputs, 0..) |input, idx| {
+        // Build evaluation context
+        var ctx = try makeContext(state_context, &tx_context, idx);
+
+        // Get input box
+        const input_box = tx_context.getInputBox(input.box_id) orelse
+            return error.InputBoxNotFound;
+
+        // Reduce ErgoTree to SigmaBoolean
+        const result = try reduceToCrypto(&input_box.ergo_tree, &ctx);
+
+        try reduced_inputs.append(.{
+            .sigma_prop = result.sigma_prop,
+            .cost = result.cost,
+            .extension = input.extension,
+        });
     }
 
-    val cost = r.getUIntExact
-    val unsignedTx = UnsignedErgoLikeTransaction(
-      unsignedInputs, tx.dataInputs, tx.outputCandidates)
-    ReducedErgoLikeTransaction(unsignedTx, reducedInputs, cost)
-  }
+    return .{
+        .unsigned_tx = tx_context.spending_tx,
+        .reduced_inputs = try reduced_inputs.toOwnedSlice(),
+        .tx_cost = 0,
+    };
 }
 ```
 
-## Exercises
+## Signing Pipeline
 
-1. **Implementation**: Build a transaction that sends tokens to multiple recipients using `UnsignedTransactionBuilder`.
+```
+Signing Flow
+══════════════════════════════════════════════════════════════════
 
-2. **Analysis**: Trace through the cost calculation in `reduceTransaction`. What are all the components of the total cost?
+┌─────────────────┐     ┌──────────────────┐     ┌───────────────┐
+│ UnsignedTx      │     │ ReducedTx        │     │ SignedTx      │
+│ + InputBoxes    │────▶│ (SigmaProps)     │────▶│ (Proofs)      │
+│ + StateContext  │     │                  │     │               │
+└─────────────────┘     └──────────────────┘     └───────────────┘
+        │                       │                       │
+        │  reduce_tx()          │  sign_reduced_tx()    │
+        │  (needs context)      │  (context-free)       │
+        ▼                       ▼                       ▼
+   ┌─────────┐            ┌─────────┐            ┌─────────┐
+   │ Online  │            │ Offline │            │ Verify  │
+   │ Wallet  │            │ Wallet  │            │ Node    │
+   └─────────┘            └─────────┘            └─────────┘
+```
 
-3. **Design**: How would you implement a multi-signature signing flow using reduced transactions?
+Transaction signing with optional hints[^15][^16]:
 
-4. **Extension**: Implement a method to estimate the minimum fee required for a transaction based on its structure.
+```zig
+pub fn signTransaction(
+    prover: *const Prover,
+    tx_context: TransactionContext,
+    state_context: *const ErgoStateContext,
+    tx_hints: ?*const TransactionHintsBag,
+) !Transaction {
+    const message = try tx_context.spending_tx.bytesToSign();
+
+    var signed_inputs = std.ArrayList(Input).init(prover.allocator);
+    for (tx_context.spending_tx.inputs, 0..) |input, idx| {
+        const signed = try signTxInput(
+            prover,
+            &tx_context,
+            state_context,
+            tx_hints,
+            idx,
+            message,
+        );
+        try signed_inputs.append(signed);
+    }
+
+    return Transaction{
+        .inputs = try signed_inputs.toOwnedSlice(),
+        .data_inputs = tx_context.spending_tx.data_inputs,
+        .outputs = tx_context.spending_tx.output_candidates,
+    };
+}
+
+pub fn signReducedTransaction(
+    prover: *const Prover,
+    reduced_tx: ReducedTransaction,
+    tx_hints: ?*const TransactionHintsBag,
+) !Transaction {
+    const message = try reduced_tx.unsigned_tx.bytesToSign();
+
+    var signed_inputs = std.ArrayList(Input).init(prover.allocator);
+    for (reduced_tx.unsigned_tx.inputs, 0..) |input, idx| {
+        const reduced_input = reduced_tx.reduced_inputs[idx];
+
+        // Get hints for this input
+        const hints = if (tx_hints) |bag|
+            bag.allHintsForInput(idx)
+        else
+            HintsBag.empty();
+
+        // Generate proof from sigma proposition
+        const proof = try prover.generateProof(
+            reduced_input.sigma_prop,
+            message,
+            &hints,
+        );
+
+        try signed_inputs.append(.{
+            .box_id = input.box_id,
+            .spending_proof = .{
+                .proof = proof,
+                .extension = reduced_input.extension,
+            },
+        });
+    }
+
+    return Transaction{
+        .inputs = try signed_inputs.toOwnedSlice(),
+        .data_inputs = reduced_tx.unsigned_tx.data_inputs,
+        .outputs = reduced_tx.unsigned_tx.output_candidates,
+    };
+}
+```
+
+## Miner Fee Box
+
+Standard miner fee output:
+
+```zig
+/// Miner fee ErgoTree (false proposition with height constraint)
+const MINERS_FEE_ERGO_TREE = [_]u8{
+    0x10, 0x05, 0x04, 0x00, 0x04, 0x00, 0x0e, 0x36,
+    0x10, 0x02, 0x04, 0xa0, 0x0b, 0x08, 0xcd, 0x02,
+    // ... (standard miner fee script)
+};
+
+pub fn newMinerFeeBox(fee: BoxValue, creation_height: u32) !ErgoBoxCandidate {
+    const tree = try ErgoTree.sigmaParse(&MINERS_FEE_ERGO_TREE);
+
+    return ErgoBoxCandidate{
+        .value = fee,
+        .ergo_tree = tree,
+        .creation_height = creation_height,
+        .tokens = &[_]Token{},
+        .additional_registers = [_]?Constant{null} ** 6,
+    };
+}
+
+/// Suggested transaction fee (1.1 mERG)
+pub const SUGGESTED_TX_FEE = BoxValue.init(1_100_000) catch unreachable;
+```
+
+## Reduced Transaction Serialization
+
+EIP-19 format for cold wallet transfer[^17][^18]:
+
+```zig
+const ReducedTransactionSerializer = struct {
+    pub fn serialize(tx: *const ReducedTransaction, writer: anytype) !void {
+        // Write message to sign (includes all tx data)
+        const msg = try tx.unsigned_tx.bytesToSign();
+        try writer.writeInt(u32, @intCast(msg.len), .little);
+        try writer.writeAll(msg);
+
+        // Write reduced inputs
+        for (tx.reduced_inputs) |red_in| {
+            try SigmaBoolean.serialize(&red_in.sigma_prop, writer);
+            try writer.writeInt(u64, red_in.cost, .little);
+        }
+
+        try writer.writeInt(u32, tx.tx_cost, .little);
+    }
+
+    pub fn parse(reader: anytype, allocator: Allocator) !ReducedTransaction {
+        // Read and parse message
+        const msg_len = try reader.readInt(u32, .little);
+        const msg = try allocator.alloc(u8, msg_len);
+        try reader.readNoEof(msg);
+
+        const tx = try Transaction.sigmaParse(msg);
+
+        // Read reduced inputs
+        var reduced_inputs = std.ArrayList(ReducedInput).init(allocator);
+        for (tx.inputs) |input| {
+            const sigma_prop = try SigmaBoolean.parse(reader);
+            const cost = try reader.readInt(u64, .little);
+
+            try reduced_inputs.append(.{
+                .sigma_prop = sigma_prop,
+                .cost = cost,
+                .extension = input.spending_proof.extension,
+            });
+        }
+
+        const tx_cost = try reader.readInt(u32, .little);
+
+        return .{
+            .unsigned_tx = tx.toUnsigned(),
+            .reduced_inputs = try reduced_inputs.toOwnedSlice(),
+            .tx_cost = tx_cost,
+        };
+    }
+};
+```
+
+## Cold Wallet Flow
+
+```
+Cold Wallet Signing
+══════════════════════════════════════════════════════════════════
+
+Online Wallet (Hot)              Cold Wallet (Air-gapped)
+──────────────────────           ────────────────────────
+       │                                    │
+  Build Unsigned Tx                         │
+       │                                    │
+  reduce_tx()                               │
+       │                                    │
+  Serialize ReducedTx ─────────────────────▶│
+  (QR code / USB)                           │
+       │                               Parse ReducedTx
+       │                                    │
+       │                               sign_reduced_tx()
+       │                               (uses secrets)
+       │                                    │
+       │◀──────────────────────── Serialize SignedTx
+       │                          (QR code / USB)
+  Broadcast Tx                              │
+       │                                    │
+       ▼                                    ▼
+```
+
+## Complete Usage Example
+
+```zig
+pub fn buildAndSignTransaction(
+    wallet: *const Wallet,
+    available_boxes: []const ErgoBox,
+    recipient: Address,
+    amount: u64,
+    state_context: *const ErgoStateContext,
+    allocator: Allocator,
+) !Transaction {
+    const current_height = state_context.pre_header.height;
+
+    // 1. Build output
+    const recipient_tree = try Contract.payToAddress(recipient);
+    var out_builder = try ErgoBoxCandidateBuilder.init(
+        try BoxValue.init(amount),
+        recipient_tree,
+        current_height,
+        allocator,
+    );
+    const output = try out_builder.build();
+
+    // 2. Select inputs
+    const total_needed = try BoxValue.init(amount + SUGGESTED_TX_FEE.as_u64());
+    const selection = try SimpleBoxSelector.select(
+        available_boxes,
+        total_needed,
+        &[_]Token{},
+        allocator,
+    );
+
+    // 3. Build transaction
+    const change_address = wallet.getP2PKAddress();
+    var builder = try TxBuilder.init(
+        selection,
+        &[_]ErgoBoxCandidate{output},
+        current_height,
+        SUGGESTED_TX_FEE,
+        change_address,
+        allocator,
+    );
+    defer builder.deinit();
+
+    const unsigned_tx = try builder.build();
+
+    // 4. Create transaction context
+    const tx_context = try TransactionContext.init(
+        unsigned_tx,
+        selection.boxes.items,
+        null,
+    );
+
+    // 5. Sign transaction
+    return wallet.signTransaction(tx_context, state_context, null);
+}
+```
 
 ## Summary
 
-- **UnsignedTransactionBuilder** provides fluent API for constructing transactions
-- **OutBoxBuilder** creates output boxes with tokens and registers
-- **ReducingInterpreter** reduces scripts to sigma propositions without secrets
-- **SigmaProver** combines reduction and signing into a simple interface
-- **JSON codecs** enable API integration with external systems
-- **Reduced transactions** enable cold wallet signing workflows
-
-## Further Reading
-
-- Source: `sdk/shared/src/main/scala/org/ergoplatform/sdk/`
-- EIP-3 (Address Generation): https://github.com/ergoplatform/eips/blob/master/eip-0003.md
-- Ergo Appkit Documentation: https://github.com/ergoplatform/ergo-appkit
+- **TxBuilder** constructs unsigned transactions with validation
+- **BoxSelection** satisfies value and token requirements
+- **ErgoBoxCandidateBuilder** creates output boxes with fluent API
+- **TransactionContext** bundles transaction with input data
+- **reduce_tx()** separates script evaluation from signing
+- **ReducedTransaction** enables air-gapped cold wallet signing
+- **Token burn** requires explicit permits to prevent accidents
 
 ---
-*[Previous: Chapter 26](../part8/ch26-wallet-signing.md) | [Next: Chapter 28](./ch28-key-derivation.md)*
+
+*Next: [Chapter 28: Key Derivation](./ch28-key-derivation.md)*
+
+[^1]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/`
+
+[^2]: Rust: `ergo-lib/src/wallet.rs:52-244`
+
+[^3]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala`
+
+[^4]: Rust: `ergo-lib/src/wallet/tx_builder.rs:41-78`
+
+[^5]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala:79-111`
+
+[^6]: Rust: `ergo-lib/src/wallet/tx_builder.rs:144-258`
+
+[^7]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala` (token validation)
+
+[^8]: Rust: `ergo-lib/src/wallet/tx_builder.rs:214-243`
+
+[^9]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/Transactions.scala:17-46`
+
+[^10]: Rust: `ergo-lib/src/wallet/tx_context.rs`
+
+[^11]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/BoxSelectionResult.scala`
+
+[^12]: Rust: `ergo-lib/src/wallet/box_selector.rs`
+
+[^13]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:274-289`
+
+[^14]: Rust: `ergo-lib/src/chain/transaction/reduced.rs:25-67`
+
+[^15]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:81-95`
+
+[^16]: Rust: `ergo-lib/src/wallet/signing.rs:143-168`
+
+[^17]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:292-336`
+
+[^18]: Rust: `ergo-lib/src/chain/transaction/reduced.rs:108-154`

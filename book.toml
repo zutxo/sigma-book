@@ -18,7 +18,7 @@ site-url = "/"
 cname = ""
 smart-punctuation = true
 mathjax-support = true
-additional-css = ["theme/highlight-monokai.css"]
+additional-css = ["theme/highlight-custom.css"]
 additional-js = []
 no-section-label = false
 

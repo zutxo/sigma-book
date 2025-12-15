@@ -2,479 +2,533 @@
 
 ## Prerequisites
 
-- **Required knowledge**: Scala programming, JVM runtime characteristics
-- **Related concepts**: Interpreter evaluation (Chapter 12), Serialization (Chapter 7)
-- **Prior chapters**: Understanding of core interpreter and compiler components
+- Evaluation model ([Chapter 12](../part5/ch12-evaluation-model.md))
+- Serialization ([Chapter 7](../part2/ch07-serialization.md))
+- Cost model ([Chapter 13](../part5/ch13-cost-model.md))
 
 ## Learning Objectives
 
-- Understand performance-critical patterns in the codebase
-- Learn the HOTSPOT annotation convention and its implications
-- Master memoization strategies for expensive operations
-- Apply collection optimization techniques
-- Understand the cfor macro for efficient looping
+- Understand performance-critical patterns in interpreters
+- Master comptime for zero-cost abstractions
+- Apply data-oriented design for cache efficiency
+- Use SIMD and vectorization for throughput
+- Profile and benchmark systematically
 
-## Source References
+## Performance Architecture
 
-- `docs/perf-style-guide.md` (comprehensive performance guide)
-- `core/shared/src/main/scala/sigma/util/MemoizedFunc.scala`
-- `core/shared/src/main/scala/sigma/kiama/rewriting/Rewriter.scala`
+Script interpretation requires processing thousands of transactions per block[^1][^2]:
 
-## Introduction
+```
+Performance Critical Paths
+══════════════════════════════════════════════════════════════════
 
-SigmaState processes thousands of transactions per block, each requiring script deserialization and verification. Performance is critical—every unnecessary allocation or inefficient loop multiplies across the network. This chapter documents the performance engineering practices that keep the interpreter fast.
+┌─────────────────────────────────────────────────────────────────┐
+│                    Transaction Flow                              │
+│                                                                  │
+│   Block (1000+ txs)                                             │
+│       │                                                         │
+│       ├── Tx 1: 3 inputs × (deserialize + evaluate + verify)   │
+│       ├── Tx 2: 1 input × (deserialize + evaluate + verify)    │
+│       ├── Tx 3: 5 inputs × (deserialize + evaluate + verify)   │
+│       └── ...                                                   │
+│                                                                  │
+│   Hot paths (per input):                                        │
+│     • Deserialization: ~50-200 opcode parses                   │
+│     • Evaluation: ~100-500 operations                          │
+│     • Proof verification: 1-10 EC operations                   │
+└─────────────────────────────────────────────────────────────────┘
 
-The codebase uses **HOTSPOT** annotations to mark performance-critical code that should not be "beautified" (refactored for readability at the expense of speed). Understanding these patterns is essential for maintaining and extending the interpreter.
-
-## The HOTSPOT Convention
-
-Throughout the codebase, you'll find comments like:
-
-```scala
-// HOTSPOT: don't beautify this code
-// HOTSPOT: executed on every typeCode during deserialization
-// HOTSPOT:: avoids thousands of allocations per second
+Performance Targets:
+  Deserialization:   < 100 µs per script
+  Evaluation:        < 500 µs per script
+  Verification:      < 2 ms per input
+  Total per block:   < 5 seconds
 ```
 
-These markers indicate code paths executed frequently—during deserialization, evaluation, or proof generation. The convention serves two purposes:
+## Comptime Optimization
 
-1. **Warning to maintainers**: Don't refactor this code for style without measuring performance impact
-2. **Documentation**: Explains why code might look "ugly" compared to idiomatic Scala
+Zig's comptime enables zero-cost abstractions:
 
-### Where HOTSPOTs Occur
+```zig
+/// Compile-time type dispatch eliminates runtime branching
+fn evalOperation(comptime op: OpCode, args: []const Value) !Value {
+    return switch (op) {
+        .plus => evalPlus(args),
+        .minus => evalMinus(args),
+        .multiply => evalMultiply(args),
+        // All branches resolved at compile time
+        inline else => |o| evalGeneric(o, args),
+    };
+}
 
-HOTSPOT annotations appear in:
+/// Comptime-generated lookup tables
+const op_costs = blk: {
+    var costs: [256]u32 = undefined;
+    for (0..256) |i| {
+        costs[i] = computeCost(@enumFromInt(i));
+    }
+    break :blk costs;
+};
 
-| Component | Example Files | Frequency |
-|-----------|--------------|-----------|
-| Serialization | `ErgoTreeSerializer`, `ValueSerializer` | Per-tree |
-| Evaluation | `CErgoTreeEvaluator`, `fixedCostOp` | Per-operation |
-| Proof handling | `SigSerializer`, `UnprovenTree` | Per-proof |
-| Validation | `ValidationRules`, `checkRule` | Per-node |
-| IR transforms | `GraphBuilding`, `Transforming` | Per-compile |
+/// Zero-cost field access via comptime offset calculation
+fn getField(comptime T: type, comptime field: []const u8, ptr: *const T) *const @TypeOf(@field(T{}, field)) {
+    const offset = @offsetOf(T, field);
+    const byte_ptr: [*]const u8 = @ptrCast(ptr);
+    return @ptrCast(@alignCast(byte_ptr + offset));
+}
+```
 
-### HOTSPOT Code Characteristics
+## Data-Oriented Design
 
-HOTSPOT code typically exhibits:
+Structure data for cache efficiency:
 
-```scala
-// From ErgoTreeSerializer.scala:243-256
-// HOTSPOT: don't beautify this code
-private def deserializeConstants(header: HeaderType, r: SigmaByteReader): IndexedSeq[Constant[SType]] = {
-  val constants: IndexedSeq[Constant[SType]] =
-    if (ErgoTree.hasSize(header)) {
-      val nConsts = r.getUInt().toInt
-      if (nConsts > 0) {
-        // HOTSPOT:: allocate new array only if it is not empty
-        val res = safeNewArray[Constant[SType]](nConsts)
-        cfor(0)(_ < nConsts, _ + 1) { i =>
-          res(i) = constantSerializer.deserialize(r)
+```zig
+/// Bad: Array of Structs (AoS) - poor cache locality for iteration
+const ValueAoS = struct {
+    tag: ValueTag,      // 1 byte
+    padding: [7]u8,     // 7 bytes padding
+    data: [8]u8,        // 8 bytes payload
+}; // 16 bytes per value, only 9 used
+
+/// Good: Struct of Arrays (SoA) - excellent cache locality
+const ValueStore = struct {
+    tags: []ValueTag,           // Packed tags
+    data: [][8]u8,              // Packed payloads
+    len: usize,
+
+    /// Iterate tags without touching payload
+    pub fn countType(self: *const ValueStore, target: ValueTag) usize {
+        var count: usize = 0;
+        for (self.tags) |tag| {
+            count += @intFromBool(tag == target);
         }
-        res
-      } else Constant.EmptySeq
-    } else Constant.EmptySeq
-  constants
+        return count;
+    }
+
+    /// Access specific value
+    pub fn get(self: *const ValueStore, idx: usize) Value {
+        return Value.decode(self.tags[idx], self.data[idx]);
+    }
+};
+```
+
+### Memory Layout Analysis
+
+```
+Cache Line Utilization
+══════════════════════════════════════════════════════════════════
+
+Array of Structs (AoS):
+┌──────────────────────────────────────────────────────────────────┐
+│ Cache Line (64 bytes)                                            │
+├──────────────────────────────────────────────────────────────────┤
+│ Value[0] │ Value[1] │ Value[2] │ Value[3] │                      │
+│ 16 bytes │ 16 bytes │ 16 bytes │ 16 bytes │                      │
+│ T+P+D    │ T+P+D    │ T+P+D    │ T+P+D    │ Wasted               │
+└──────────────────────────────────────────────────────────────────┘
+Tag iteration: 25% cache utilization (touches only 1 byte per 16)
+
+Struct of Arrays (SoA):
+┌──────────────────────────────────────────────────────────────────┐
+│ Tags Cache Line (64 bytes)                                       │
+├──────────────────────────────────────────────────────────────────┤
+│ T[0] T[1] T[2] ... T[63]                                        │
+│ 64 tags in single cache line                                    │
+└──────────────────────────────────────────────────────────────────┘
+Tag iteration: 100% cache utilization (64 values per fetch)
+
+Speedup: ~4x for tag-only operations
+```
+
+## Arena Allocators
+
+Batch allocations reduce overhead:
+
+```zig
+const ArenaAllocator = std.heap.ArenaAllocator;
+
+/// Evaluation context with arena for temporary allocations
+const EvalContext = struct {
+    arena: ArenaAllocator,
+    constants: []const Constant,
+    env: Environment,
+
+    pub fn init(backing: Allocator) EvalContext {
+        return .{
+            .arena = ArenaAllocator.init(backing),
+            .constants = &[_]Constant{},
+            .env = Environment.init(),
+        };
+    }
+
+    /// All temporary allocations use arena
+    pub fn allocTemp(self: *EvalContext, comptime T: type, n: usize) ![]T {
+        return self.arena.allocator().alloc(T, n);
+    }
+
+    /// Single deallocation frees all temps
+    pub fn reset(self: *EvalContext) void {
+        _ = self.arena.reset(.retain_capacity);
+    }
+
+    pub fn deinit(self: *EvalContext) void {
+        self.arena.deinit();
+    }
+};
+
+/// Usage: batch evaluation without per-operation allocations
+fn evaluateScript(tree: *const ErgoTree, allocator: Allocator) !Value {
+    var ctx = EvalContext.init(allocator);
+    defer ctx.deinit();
+
+    for (tree.ops) |op| {
+        try evalOp(op, &ctx);
+    }
+
+    ctx.reset(); // Free all temps at once
+    return ctx.result;
 }
 ```
 
-Key patterns visible here:
-- **Conditional allocation**: Only create array when needed
-- **`cfor` macro**: Efficient iteration without closure allocation
-- **Pre-allocated empty sequences**: Avoid creating new empty collections
-- **Direct array manipulation**: Mutable arrays over immutable collections
+## Loop Optimization
 
-## The cfor Macro
+Efficient iteration patterns:
 
-Standard Scala `for` loops are convenient but expensive:
+```zig
+/// Unrolled loop for fixed-size operations
+fn hashBlock(data: *const [64]u8, state: *[8]u32) void {
+    // Process 16 words per iteration, unrolled
+    comptime var i: usize = 0;
+    inline while (i < 64) : (i += 4) {
+        const w0 = std.mem.readInt(u32, data[i..][0..4], .big);
+        const w1 = std.mem.readInt(u32, data[i + 4..][0..4], .big);
+        const w2 = std.mem.readInt(u32, data[i + 8..][0..4], .big);
+        const w3 = std.mem.readInt(u32, data[i + 12..][0..4], .big);
+        round(state, w0);
+        round(state, w1);
+        round(state, w2);
+        round(state, w3);
+    }
+}
 
-```scala
-// This innocuous code...
-for (x <- xs) { process(x) }
+/// Vectorized collection operations
+fn sumValues(values: []const i64) i64 {
+    const Vec = @Vector(4, i64);
+    var sum_vec: Vec = @splat(0);
 
-// ...desugars to:
-xs.foreach { x => process(x) }
+    var i: usize = 0;
+    while (i + 4 <= values.len) : (i += 4) {
+        const chunk: Vec = values[i..][0..4].*;
+        sum_vec += chunk;
+    }
 
-// Which involves:
-// 1. Method call to foreach
-// 2. Lambda object allocation
-// 3. Boxing of primitive arguments
-// 4. Hidden iterator overhead
-```
+    // Reduce vector to scalar
+    var sum = @reduce(.Add, sum_vec);
 
-### cfor Solution
+    // Handle remainder
+    while (i < values.len) : (i += 1) {
+        sum += values[i];
+    }
 
-The `cfor` macro from the debox library compiles to efficient Java `for` loops:
-
-```scala
-import debox.cfor
-
-// Instead of: for (i <- 0 until n) { ... }
-cfor(0)(_ < n, _ + 1) { i =>
-  val x = xs(i)
-  process(x)
+    return sum;
 }
 ```
-
-This is **20-50x faster** than `foreach` for performance-critical loops.
-
-### cfor Usage Pattern
-
-```scala
-// From Transforming.scala:247-253
-// HOTSPOT:
-def mirrorSymbols(t0: Transformer, rewriter: Rewriter, nodes: DBuffer[Int]): Transformer = {
-  var t: Transformer = t0
-  cfor(0)(_ < nodes.length, _ + 1) { i =>
-    val id = nodes(i)
-    t = mirrorNode(t, rewriter, getSym(id))
-  }
-  t
-}
-```
-
-The `cfor` call sites in the codebase include:
-- `GF2_192.scala` and `GF2_192_Poly.scala` - Cryptographic operations
-- `GraphBuilding.scala` - IR construction
-- `AstGraphs.scala` - Schedule building
-- `ErgoTreeSerializer.scala` - Constant deserialization
-- Various serializers throughout
 
 ## Memoization
 
-Expensive operations that produce deterministic results should be computed once:
+Cache expensive computations:
 
-### MemoizedFunc Class
+```zig
+/// Generic memoization with comptime key type
+fn Memoized(comptime K: type, comptime V: type) type {
+    return struct {
+        cache: std.AutoHashMap(K, V),
 
-```scala
-// From MemoizedFunc.scala
-class MemoizedFunc(f: AnyRef => AnyRef) {
-  private var _table: AVHashMap[AnyRef, AnyRef] = AVHashMap(100)
+        const Self = @This();
 
-  /** Apply function using cached result if available. */
-  def apply[T <: AnyRef](x: T): AnyRef = {
-    var v = _table(x)
-    if (v == null) {
-      v = f(x)
-      _table.put(x, v)
+        pub fn init(allocator: Allocator) Self {
+            return .{ .cache = std.AutoHashMap(K, V).init(allocator) };
+        }
+
+        pub fn getOrCompute(
+            self: *Self,
+            key: K,
+            compute: *const fn (K) V,
+        ) V {
+            const result = self.cache.getOrPut(key) catch unreachable;
+            if (!result.found_existing) {
+                result.value_ptr.* = compute(key);
+            }
+            return result.value_ptr.*;
+        }
+
+        pub fn reset(self: *Self) void {
+            self.cache.clearRetainingCapacity();
+        }
+    };
+}
+
+/// Type method resolution memoization
+const MethodCache = Memoized(struct { type_code: u8, method_id: u8 }, *const Method);
+
+var method_cache: MethodCache = undefined;
+
+fn resolveMethod(type_code: u8, method_id: u8) *const Method {
+    return method_cache.getOrCompute(
+        .{ .type_code = type_code, .method_id = method_id },
+        computeMethod,
+    );
+}
+```
+
+## String Interning
+
+Avoid repeated string allocations:
+
+```zig
+const StringInterner = struct {
+    table: std.StringHashMap([]const u8),
+    arena: ArenaAllocator,
+
+    pub fn init(allocator: Allocator) StringInterner {
+        return .{
+            .table = std.StringHashMap([]const u8).init(allocator),
+            .arena = ArenaAllocator.init(allocator),
+        };
     }
-    v
-  }
 
-  /** Clears the cache of memoized results. */
-  def reset() = {
-    _table = AVHashMap(100)
-  }
-}
-```
+    /// Return interned string (pointer stable for lifetime)
+    pub fn intern(self: *StringInterner, str: []const u8) []const u8 {
+        if (self.table.get(str)) |existing| {
+            return existing;
+        }
 
-Key design choices:
-- **`null` vs `Option`**: Using `null` avoids `Option` allocation on every lookup
-- **AVHashMap**: Custom hash map optimized for the use case
-- **Initial capacity 100**: Pre-sized for typical usage patterns
-- **Reset capability**: Clear cache between independent operations
-
-### When to Memoize
-
-Good candidates for memoization:
-- Type checking results
-- Method resolution
-- Cost calculations for repeated structures
-- Hash computations
-
-Bad candidates:
-- Functions with side effects
-- Functions with mutable arguments
-- Operations already fast enough
-- Operations called only once
-
-## Collection Optimization
-
-### Empty Collections
-
-Creating empty collections has overhead:
-
-```scala
-// Slow: calls apply method, checks isEmpty, creates builder
-Seq()
-Map()
-
-// Fast: returns pre-allocated singleton
-Nil           // 3-20x faster than Seq()
-Map.empty     // 50-70% faster than Map()
-```
-
-The codebase defines pre-allocated empty sequences:
-
-```scala
-// From Constant.scala
-object Constant {
-  val EmptySeq: IndexedSeq[Constant[SType]] = Array.empty[Constant[SType]]
-}
-
-// From ContractTemplate.scala
-val EmptySeq: IndexedSeq[Parameter] = Array.empty[Parameter]
-```
-
-### Array vs Seq
-
-When you need a fixed-size collection:
-
-```scala
-// Slow: multiple allocations, boxing, list construction
-Seq(1, 2, 3)
-
-// Fast: single array allocation
-Array(1, 2, 3)  // 4-10x faster
-```
-
-Arrays wrapped implicitly provide `Seq` interface:
-
-```scala
-// From transformers.scala:502-503
-// HOTSPOT:: avoids thousands of allocations per second
-private val BoxAndByte: IndexedSeq[SType] = Array(SBox, SByte)
-```
-
-This pattern:
-1. Creates a single array at class loading time
-2. Implicitly converts to `IndexedSeq` when needed
-3. Avoids repeated allocations in hot paths
-
-### Pre-allocated Arrays
-
-For frequently accessed collections:
-
-```scala
-// From ErgoBox.scala:174-176
-// HOTSPOT: don't beautify the code in this companion
-private val _mandatoryRegisters: Array[MandatoryRegisterId] = Array(R0, R1, R2, R3)
-val mandatoryRegisters: Seq[MandatoryRegisterId] = _mandatoryRegisters
-```
-
-## Avoiding Allocations
-
-### null vs Option
-
-In HOTSPOTs, `null` is often preferred over `Option`:
-
-```scala
-// From CErgoTreeEvaluator.scala:487-489
-// HOTSPOT: don't beautify the code
-// Note, `null` is used instead of Option to avoid allocations.
-def fixedCostOp[R](costInfo: OperationCostInfo[FixedCost])
-                  (block: => R)(implicit E: ErgoTreeEvaluator): R
-```
-
-The trade-off:
-- `Option`: Safe, idiomatic, but allocates `Some()` wrapper
-- `null`: Unsafe (NPE risk), but zero allocation overhead
-
-This is acceptable in HOTSPOTs because:
-1. The code paths are well-tested
-2. The performance gain is measurable
-3. The scope is limited and clearly documented
-
-### Value Classes and Extractors
-
-Standard pattern matching allocates on extraction:
-
-```scala
-object PositiveInt {
-  def unapply(n: Int): Option[Int] =
-    if (n > 0) Some(n) else None  // Allocates Some every match
-}
-```
-
-Name-based extractors with value classes avoid this:
-
-```scala
-// Uses spire.util.Opt or similar value class pattern
-class Opt[+A](val value: A) extends AnyVal {
-  def isEmpty: Boolean = value == null
-  def get: A = value
-}
-
-object PositiveInt {
-  def unapply(n: Int): Opt[Int] =
-    if (n > 0) new Opt(n) else Opt.empty  // No allocation (value class)
-}
-```
-
-This is **1.5-2x faster** than Option-based extractors.
-
-## Abstract Class vs Trait
-
-Method invocation differs by type:
-
-```scala
-trait Foo {
-  def method(): Int  // Uses invokeinterface
-}
-
-abstract class Bar {
-  def method(): Int  // Uses invokevirtual
-}
-```
-
-`invokeinterface` is slower because:
-1. JIT has harder time optimizing
-2. Method lookup requires additional indirection
-3. Less predictable call sites hinder inlining
-
-Recommendation: Use `abstract class` by default, `trait` only when mixin composition is required.
-
-## Lazy Initialization
-
-For expensive computations not always needed:
-
-```scala
-// From SigmaByteReader.scala:27-32
-// The reader should be lightweight to create. In most cases ErgoTrees don't have
-// ValDef nodes hence the store is not necessary and it's initialization dominates
-// the reader instantiation time. Hence it's lazy.
-// HOTSPOT:
-lazy val valDefTypeStore: ValDefTypeStore = new ValDefTypeStore()
-```
-
-Use `lazy val` when:
-- Initialization is expensive
-- Value may not be needed in all code paths
-- Value is needed multiple times if used at all
-
-Avoid `lazy val` when:
-- Initialization is cheap (overhead of lazy outweighs benefit)
-- Value is always needed
-- Thread contention is a concern (lazy val has synchronization overhead)
-
-## Validation Rule Optimization
-
-Validation rules are checked frequently:
-
-```scala
-// From ValidationRules.scala:24-30
-// Check the rule is registered and enabled.
-// Since it is easy to forget to register new rule, we need to do this check.
-// But because it is hotspot, we do this check only once for each rule.
-// HOTSPOT: executed on every typeCode and opCode during script deserialization
-@inline protected final def checkRule(): Unit = {
-  if (!_checked) {
-    // First-time check: verify registration
-    _checked = true
-  }
-}
-```
-
-Pattern: **First-time initialization** with flag check is faster than repeated lookups or registration verification.
-
-## Tree Rewriting Optimization
-
-The compiler uses Stratego-style term rewriting:
-
-```scala
-// From Rewriter.scala
-trait Rewriter {
-  def rewrite[T](s: Strategy)(t: T): T = {
-    s(t) match {
-      case Some(t1) => t1.asInstanceOf[T]
-      case None     => t
+        // Allocate permanent copy
+        const copy = self.arena.allocator().dupe(u8, str) catch unreachable;
+        self.table.put(copy, copy) catch unreachable;
+        return copy;
     }
-  }
+};
+
+// Variable names are interned for fast comparison
+fn lookupVar(env: *const Environment, name: []const u8) ?Value {
+    const interned = global_interner.intern(name);
+    return env.bindings.get(interned);
 }
 ```
 
-Optimizations in graph rewriting:
+## SIMD for Crypto
 
-```scala
-// From GraphBuilding.scala:154-158
-// Unfortunately, this is less readable, but gives significant performance boost
-// Look at comments to understand the logic of the rules.
-// HOTSPOT: executed for each node of the graph, don't beautify.
-override def rewriteDef[T](d: Def[T]): Ref[_] = {
-  // Direct pattern matching without intermediate abstractions
+Vectorized elliptic curve operations:
+
+```zig
+/// SIMD-accelerated field multiplication (mod p)
+fn mulModP(a: *const [4]u64, b: *const [4]u64) [4]u64 {
+    // Use vector operations where available
+    if (comptime std.Target.current.cpu.arch.isX86()) {
+        return mulModP_avx2(a, b);
+    } else if (comptime std.Target.current.cpu.arch.isAARCH64()) {
+        return mulModP_neon(a, b);
+    } else {
+        return mulModP_scalar(a, b);
+    }
+}
+
+fn mulModP_avx2(a: *const [4]u64, b: *const [4]u64) [4]u64 {
+    // AVX2 implementation using 256-bit vectors
+    const va: @Vector(4, u64) = a.*;
+    const vb: @Vector(4, u64) = b.*;
+
+    // Schoolbook multiplication with vector operations
+    // ... (optimized implementation)
+
+    return result;
 }
 ```
 
-The `rewriteDef` method uses extensive pattern matching directly rather than through helper methods, trading readability for speed.
+## Profiling and Benchmarking
 
-## Benchmarking
+Built-in profiling support:
 
-The codebase includes benchmark suites:
+```zig
+const Timer = struct {
+    start: i128,
 
-```
-sc/jvm/src/test/scala/special/collections/
-├── BasicBenchmarks.scala
-├── BufferBenchmark.scala
-├── CollBenchmark.scala
-├── MapBenchmark.scala
-└── SymBenchmark.scala
-```
+    pub fn init() Timer {
+        return .{ .start = std.time.nanoTimestamp() };
+    }
 
-### Benchmarking Principles
+    pub fn elapsed(self: *const Timer) u64 {
+        const now = std.time.nanoTimestamp();
+        return @intCast(now - self.start);
+    }
+};
 
-1. **Isolate**: Benchmark single operations, not whole pipelines
-2. **Warm up**: Allow JIT compilation before measuring
-3. **Repeat**: Run many iterations to reduce variance
-4. **Compare**: Always benchmark against baseline
-5. **Profile**: Use JITWatch or async-profiler for deeper analysis
+/// Benchmark harness
+fn benchmark(
+    comptime name: []const u8,
+    comptime iterations: usize,
+    comptime warmup: usize,
+    func: *const fn () void,
+) void {
+    // Warmup
+    for (0..warmup) |_| {
+        func();
+    }
 
-### Example Benchmark Pattern
+    // Measure
+    const timer = Timer.init();
+    for (0..iterations) |_| {
+        func();
+    }
+    const total_ns = timer.elapsed();
 
-```scala
-def benchmark[T](name: String, iterations: Int)(block: => T): Unit = {
-  // Warm up
-  cfor(0)(_ < 1000, _ + 1) { _ => block }
+    const ns_per_op = total_ns / iterations;
+    const ops_per_sec = @as(f64, 1_000_000_000) / @as(f64, @floatFromInt(ns_per_op));
 
-  // Measure
-  val start = System.nanoTime()
-  cfor(0)(_ < iterations, _ + 1) { _ => block }
-  val elapsed = System.nanoTime() - start
-
-  println(s"$name: ${elapsed / iterations} ns/op")
+    std.debug.print("{s}: {} ns/op ({d:.0} ops/sec)\n", .{
+        name,
+        ns_per_op,
+        ops_per_sec,
+    });
 }
+
+// Usage
+test "benchmark deserialization" {
+    benchmark("deserialize_script", 10000, 1000, struct {
+        fn run() void {
+            _ = deserialize(test_script);
+        }
+    }.run);
+}
+```
+
+## Memory Profiling
+
+Track allocations in debug builds:
+
+```zig
+const DebugAllocator = struct {
+    backing: Allocator,
+    total_allocated: usize = 0,
+    total_freed: usize = 0,
+    allocation_count: usize = 0,
+
+    pub fn allocator(self: *DebugAllocator) Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = resize,
+                .free = free,
+            },
+        };
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, ptr_align: u8, ret_addr: usize) ?[*]u8 {
+        const self: *DebugAllocator = @ptrCast(@alignCast(ctx));
+        self.total_allocated += len;
+        self.allocation_count += 1;
+        return self.backing.rawAlloc(len, ptr_align, ret_addr);
+    }
+
+    // ... other methods
+
+    pub fn report(self: *const DebugAllocator) void {
+        std.debug.print("Allocations: {}\n", .{self.allocation_count});
+        std.debug.print("Total allocated: {} bytes\n", .{self.total_allocated});
+        std.debug.print("Total freed: {} bytes\n", .{self.total_freed});
+        std.debug.print("Leaked: {} bytes\n", .{self.total_allocated - self.total_freed});
+    }
+};
+```
+
+## Performance Patterns
+
+```
+Optimization Decision Tree
+══════════════════════════════════════════════════════════════════
+
+Is operation in hot path?
+│
+├── NO → Optimize for clarity, not speed
+│
+└── YES → Profile first, then:
+    │
+    ├── CPU-bound?
+    │   ├── Use comptime for dispatch
+    │   ├── Unroll small loops
+    │   ├── Use SIMD where applicable
+    │   └── Inline critical functions
+    │
+    ├── Memory-bound?
+    │   ├── Use SoA layout
+    │   ├── Pool/arena allocators
+    │   ├── Reduce allocations
+    │   └── Prefetch data
+    │
+    └── Allocation-bound?
+        ├── Arena allocators
+        ├── Object pools
+        ├── String interning
+        └── Stack allocation where safe
 ```
 
 ## Performance Checklist
 
 When writing performance-critical code:
 
-- [ ] Use `cfor` instead of `for` loops on indexed collections
-- [ ] Use `Nil` instead of `Seq()` for empty sequences
-- [ ] Use `Map.empty` instead of `Map()` for empty maps
-- [ ] Use `Array(...)` instead of `Seq(...)` for small fixed collections
-- [ ] Pre-allocate frequently used empty collections
-- [ ] Consider `null` instead of `Option` in true HOTSPOTs
-- [ ] Use `abstract class` instead of `trait` where possible
-- [ ] Add HOTSPOT comment to document performance-critical code
-- [ ] Benchmark before and after changes
-- [ ] Consider memoization for expensive pure functions
+```zig
+// ✓ Use comptime for type-level decisions
+const Handler = comptime getHandler(op);
 
-## Exercises
+// ✓ Pre-compute lookup tables
+const costs = comptime computeCostTable();
 
-1. **Conceptual**: Why does `Seq()` perform worse than `Nil`? Trace through the Scala standard library to understand the allocation differences.
+// ✓ Use SoA for iterated data
+const Store = struct { tags: []Tag, values: []Value };
 
-2. **Measurement**: Write a benchmark comparing `for (i <- 0 until n)` vs `cfor(0)(_ < n, _ + 1)` for different values of n. At what n does the difference become significant?
+// ✓ Arena allocators for batch operations
+var arena = ArenaAllocator.init(allocator);
+defer arena.deinit();
 
-3. **Analysis**: Find three HOTSPOT annotations in the codebase and explain what makes each code path performance-critical.
+// ✓ Inline hot functions
+pub inline fn addCost(self: *CostAccum, cost: u32) !void
 
-4. **Implementation**: Implement a memoized version of a recursive Fibonacci function using the `MemoizedFunc` pattern. Compare performance with the naive recursive version.
+// ✓ Avoid allocations in tight loops
+for (items) |item| {
+    // Process without allocation
+}
+
+// ✓ Use vectors for parallel data
+const Vec4 = @Vector(4, u64);
+
+// ✓ Profile before optimizing
+// std.debug.print("elapsed: {} ns\n", .{timer.elapsed()});
+```
 
 ## Summary
 
-- **HOTSPOT annotations** mark performance-critical code that shouldn't be refactored for style
-- **cfor macro** provides 20-50x faster loops than standard Scala `for`
-- **Memoization** caches expensive computations with `MemoizedFunc`
-- **Collection optimization**: Use `Nil`, `Map.empty`, `Array(...)` over generic constructors
-- **Allocation avoidance**: Use `null` over `Option` in true HOTSPOTs, pre-allocate empty collections
-- **Abstract class over trait** for faster method dispatch
-- **Benchmark everything** before and after performance changes
-
-## Further Reading
-
-- Source: `docs/perf-style-guide.md` (complete performance guide)
-- Source: `core/shared/src/main/scala/sigma/util/MemoizedFunc.scala`
-- [Scala High Performance Programming](https://www.amazon.com/Scala-Performance-Programming-Vincent-Theron/dp/178646604X)
-- [JITWatch](https://github.com/AdoptOpenJDK/jitwatch) - JIT compilation visualizer
-- [debox library](https://github.com/ScorexFoundation/debox) - High-performance Scala collections
+- **Comptime** enables zero-cost abstractions and compile-time dispatch
+- **Data-oriented design** (SoA) improves cache efficiency 4x+
+- **Arena allocators** batch deallocations for throughput
+- **Loop unrolling** and SIMD accelerate hot paths
+- **Memoization** caches expensive computations
+- **String interning** reduces allocation pressure
+- **Profile first** before optimizing—measure, don't guess
 
 ---
-*[Previous: Chapter 30](./ch30-cross-platform-support.md) | [Next: Appendix A](../appendices/appendix-a-type-codes.md)*
+
+*Next: [Appendix A: Type Codes](../appendices/appendix-a-type-codes.md)*
+
+[^1]: Scala: `docs/perf-style-guide.md` (HOTSPOT patterns)
+
+[^2]: Rust: Performance-oriented design throughout sigma-rust crates
+
+[^3]: Scala: `core/shared/src/main/scala/sigma/util/MemoizedFunc.scala`
+
+[^4]: Rust: Memoization patterns in ergotree-interpreter
+
+[^5]: Scala: `interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala` (fixedCostOp)
+
+[^6]: Rust: `ergotree-interpreter/src/eval.rs` (cost tracking)

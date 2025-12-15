@@ -17,6 +17,40 @@
 
 Methods are organized through a `MethodsContainer` system[^1][^2]:
 
+```
+Method Organization
+══════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────┐
+│                    STypeCompanion                               │
+│    (type_code: u8, methods: []const SMethodDesc)               │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+       ┌────────────────┼────────────────┬───────────────────┐
+       ▼                ▼                ▼                   ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ SNumeric     │ │ SBox         │ │ SColl        │ │ SContext     │
+│ TYPE_CODE=2-6│ │ TYPE_CODE=99 │ │ TYPE_CODE=12 │ │ TYPE_CODE=101│
+├──────────────┤ ├──────────────┤ ├──────────────┤ ├──────────────┤
+│ toByte   (1) │ │ value    (1) │ │ size     (1) │ │ dataInputs(1)│
+│ toShort  (2) │ │ propBytes(2) │ │ getOrElse(2) │ │ headers  (2) │
+│ toInt    (3) │ │ bytes    (3) │ │ map      (3) │ │ preHeader(3) │
+│ toLong   (4) │ │ id       (5) │ │ exists   (4) │ │ INPUTS   (4) │
+│ toBigInt (5) │ │ getReg   (7) │ │ forall   (5) │ │ OUTPUTS  (5) │
+│ toBytes  (6) │ │ tokens   (8) │ │ fold     (6) │ │ HEIGHT   (6) │
+│ ...          │ │ ...          │ │ ...          │ │ ...          │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+
+Method Resolution:
+  MethodCall(receiver, type_code=99, method_id=1)
+       │
+       ▼
+  resolveMethod(99, 1) → SBoxMethods.VALUE
+       │
+       ▼
+  method.eval(receiver, args, evaluator)
+```
+
 ```zig
 const MethodsContainer = struct {
     type_code: u8,
@@ -275,24 +309,29 @@ const SCollectionMethods = struct {
 
 ### Collection Method Summary
 
-| ID | Method | Description |
-|----|--------|-------------|
-| 1 | size | Number of elements |
-| 2 | getOrElse | Element with default |
-| 3 | map | Transform elements |
-| 4 | exists | Any match predicate |
-| 5 | forall | All match predicate |
-| 6 | fold | Reduce to single value |
-| 7 | apply | Element at index |
-| 8 | filter | Keep matching elements |
-| 9 | append | Concatenate |
-| 10 | slice | Extract range |
-| 11 | indices | Range 0..size-1 |
-| 12 | flatMap | Map and flatten |
-| 13 | patch | Replace range |
-| 14 | zip | Pair with other collection |
-| 15 | updated | Replace at index |
-| 26 | indexOf | Find element index |
+| ID | Method | v5 | v6 | Description |
+|----|--------|----|----|-------------|
+| 1 | size | ✓ | ✓ | Number of elements |
+| 2 | getOrElse | ✓ | ✓ | Element with default |
+| 3 | map | ✓ | ✓ | Transform elements |
+| 4 | exists | ✓ | ✓ | Any match predicate |
+| 5 | forall | ✓ | ✓ | All match predicate |
+| 6 | fold | ✓ | ✓ | Reduce to single value |
+| 7 | apply | ✓ | ✓ | Element at index (panics if OOB) |
+| 8 | filter | ✓ | ✓ | Keep matching elements |
+| 9 | append | ✓ | ✓ | Concatenate |
+| 10 | slice | ✓ | ✓ | Extract range |
+| 14 | indices | ✓ | ✓ | Range 0..size-1 |
+| 15 | flatMap | ✓ | ✓ | Map and flatten |
+| 19 | patch | ✓ | ✓ | Replace range |
+| 20 | updated | ✓ | ✓ | Replace at index |
+| 21 | updateMany | ✓ | ✓ | Batch update |
+| 26 | indexOf | ✓ | ✓ | Find element index |
+| 29 | zip | ✓ | ✓ | Pair with other collection |
+| 30 | reverse | - | ✓ | Reverse order |
+| 31 | startsWith | - | ✓ | Prefix match |
+| 32 | endsWith | - | ✓ | Suffix match |
+| 33 | get | - | ✓ | Safe element access (returns Option) |
 
 ## Box Methods
 
@@ -428,7 +467,7 @@ const SContextMethods = struct {
 
 ## GroupElement Methods
 
-Elliptic curve operations[^11]:
+Elliptic curve operations[^11][^12]:
 
 ```zig
 const SGroupElementMethods = struct {
@@ -466,7 +505,7 @@ const SGroupElementMethods = struct {
 
 ## SigmaProp Methods
 
-Cryptographic proposition operations[^12]:
+Cryptographic proposition operations[^13]:
 
 ```zig
 const SSigmaPropMethods = struct {
@@ -559,7 +598,7 @@ const MethodCall = struct {
 
 [^1]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala`
 
-[^2]: Rust: `ergotree-ir/src/types/smethod.rs:36-50`
+[^2]: Rust: `ergotree-ir/src/types/smethod.rs:36-99` (SMethod, SMethodDesc)
 
 [^3]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:232-500`
 
@@ -567,11 +606,11 @@ const MethodCall = struct {
 
 [^5]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:805-1260`
 
-[^6]: Rust: `ergotree-ir/src/types/scoll.rs`
+[^6]: Rust: `ergotree-ir/src/types/scoll.rs:22-266` (METHOD_DESC, method IDs)
 
 [^7]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SBoxMethods)
 
-[^8]: Rust: `ergotree-ir/src/types/sbox.rs`
+[^8]: Rust: `ergotree-ir/src/types/sbox.rs:29-92` (VALUE_METHOD, GET_REG_METHOD, TOKENS_METHOD)
 
 [^9]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SContextMethods)
 
@@ -579,4 +618,6 @@ const MethodCall = struct {
 
 [^11]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SGroupElementMethods)
 
-[^12]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SSigmaPropMethods)
+[^12]: Rust: `ergotree-ir/src/types/sgroup_elem.rs`
+
+[^13]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SSigmaPropMethods)

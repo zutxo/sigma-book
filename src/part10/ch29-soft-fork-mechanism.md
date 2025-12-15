@@ -2,652 +2,643 @@
 
 ## Prerequisites
 
-- **Required knowledge**: ErgoTree structure (Chapter 3), Serialization (Chapter 7)
-- **Related concepts**: Transaction validation (Chapter 24), Cost model (Chapter 13)
-- **Prior chapters**: Chapter 28 (Key Derivation)
+- ErgoTree structure ([Chapter 3](../part1/ch03-ergotree-structure.md))
+- Serialization ([Chapter 7](../part2/ch07-serialization.md))
+- Transaction validation ([Chapter 24](../part8/ch24-transaction-validation.md))
 
 ## Learning Objectives
 
 - Understand version context and script versioning
-- Master validation rule status and soft-fork conditions
-- Learn unknown opcode handling
-- Understand the AOT to JIT interpreter transition
+- Implement validation rules with configurable status
+- Master unknown opcode handling for soft-forks
+- Work with the AOT to JIT interpreter transition
 
-## Source References
+## Version Context Architecture
 
-- `core/shared/src/main/scala/sigma/VersionContext.scala`
-- `core/shared/src/main/scala/sigma/validation/ValidationRules.scala`
-- `core/shared/src/main/scala/sigma/validation/SigmaValidationSettings.scala`
-- `core/shared/src/main/scala/sigma/validation/SoftForkChecker.scala`
-- `core/shared/src/main/scala/sigma/validation/RuleStatus.scala`
-- `docs/aot-jit-switch.md`
+The soft-fork mechanism enables protocol upgrades without breaking consensus[^1][^2]:
 
-## Introduction
+```
+Soft-Fork Version Architecture
+══════════════════════════════════════════════════════════════════
 
-Ergo's soft-fork mechanism enables protocol upgrades without breaking consensus among nodes running different versions. Key features include:
+┌─────────────────────────────────────────────────────────────────┐
+│                    Block Header                                  │
+│                                                                  │
+│   Block Version: 1, 2, 3, 4                                     │
+│                                                                  │
+│   Activated Script Version = Block Version - 1                  │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ErgoTree Header                               │
+│                                                                  │
+│   7   6   5   4   3   2   1   0                                 │
+│   ├───┼───┼───┼───┼───┼───┼───┤                                 │
+│   │ M │ G │ C │ S │ Z │ V │ V │ V                               │
+│   └───┴───┴───┴───┴───┴───┴───┘                                 │
+│   M = More bytes follow                                         │
+│   G = GZIP (reserved)                                           │
+│   C = Context costing (reserved)                                │
+│   S = Constant segregation                                      │
+│   Z = Size included                                             │
+│   V = Version (0-7)                                             │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-1. **Version context** - Track activated protocol and ErgoTree versions
-2. **Validation rules** - Configurable rules with statuses that can change via voting
-3. **Soft-fork detection** - Recognize new opcodes/types as soft-fork conditions
-4. **Graceful degradation** - Old nodes can accept blocks they cannot fully verify
+## ErgoTree Version
+
+Script version is encoded in header bits 0-2[^3][^4]:
+
+```zig
+const ErgoTreeVersion = struct {
+    value: u3, // 0-7
+
+    const VERSION_MASK: u8 = 0x07;
+
+    /// Version 0 - Initial mainnet (v3.x)
+    pub const V0 = ErgoTreeVersion{ .value = 0 };
+    /// Version 1 - Height monotonicity (v4.x)
+    pub const V1 = ErgoTreeVersion{ .value = 1 };
+    /// Version 2 - JIT interpreter (v5.x)
+    pub const V2 = ErgoTreeVersion{ .value = 2 };
+    /// Version 3 - Sub-blocks, new ops (v6.x)
+    pub const V3 = ErgoTreeVersion{ .value = 3 };
+
+    /// Maximum supported script version
+    pub const MAX_SCRIPT_VERSION = V3;
+
+    /// Parse version from header byte
+    pub fn parseVersion(header_byte: u8) ErgoTreeVersion {
+        return .{ .value = @truncate(header_byte & VERSION_MASK) };
+    }
+
+    pub fn toU8(self: ErgoTreeVersion) u8 {
+        return @as(u8, self.value);
+    }
+};
+```
+
+## ErgoTree Header
+
+Header byte encoding with flags[^5][^6]:
+
+```zig
+const ErgoTreeHeader = struct {
+    version: ErgoTreeVersion,
+    is_constant_segregation: bool,
+    has_size: bool,
+
+    const CONSTANT_SEGREGATION_FLAG: u8 = 0b0001_0000;
+    const HAS_SIZE_FLAG: u8 = 0b0000_1000;
+
+    /// Parse header from byte
+    pub fn parse(header_byte: u8) !ErgoTreeHeader {
+        return .{
+            .version = ErgoTreeVersion.parseVersion(header_byte),
+            .is_constant_segregation = (header_byte & CONSTANT_SEGREGATION_FLAG) != 0,
+            .has_size = (header_byte & HAS_SIZE_FLAG) != 0,
+        };
+    }
+
+    /// Serialize header to byte
+    pub fn serialize(self: *const ErgoTreeHeader) u8 {
+        var header_byte: u8 = self.version.toU8();
+        if (self.is_constant_segregation) {
+            header_byte |= CONSTANT_SEGREGATION_FLAG;
+        }
+        if (self.has_size) {
+            header_byte |= HAS_SIZE_FLAG;
+        }
+        return header_byte;
+    }
+
+    /// Create v0 header
+    pub fn v0(constant_segregation: bool) ErgoTreeHeader {
+        return .{
+            .version = ErgoTreeVersion.V0,
+            .is_constant_segregation = constant_segregation,
+            .has_size = false,
+        };
+    }
+
+    /// Create v1 header (size is mandatory)
+    pub fn v1(constant_segregation: bool) ErgoTreeHeader {
+        return .{
+            .version = ErgoTreeVersion.V1,
+            .is_constant_segregation = constant_segregation,
+            .has_size = true,
+        };
+    }
+};
+```
 
 ## Version Context
 
-The `VersionContext` tracks the current protocol and script versions:
+Thread-local context tracks activated and tree versions[^7][^8]:
 
-```scala
-// From VersionContext.scala:17-35
-case class VersionContext(activatedVersion: Byte, ergoTreeVersion: Byte) {
-  // Validate: ergoTreeVersion <= activatedVersion
-  require(activatedVersion < JitActivationVersion || ergoTreeVersion <= activatedVersion,
-    s"ergoTreeVersion must never exceed activatedVersion: $this")
+```zig
+const VersionContext = struct {
+    activated_version: u8,
+    ergo_tree_version: u8,
 
-  /** True if JIT costing is activated (v5.0+) */
-  def isJitActivated: Boolean = activatedVersion >= JitActivationVersion
+    /// JIT costing activation version (v5.0)
+    const JIT_ACTIVATION_VERSION: u8 = 2;
+    /// v6.0 soft-fork version
+    const V6_SOFT_FORK_VERSION: u8 = 3;
 
-  /** True if v6.0 ErgoTree version */
-  def isV3OrLaterErgoTreeVersion: Boolean = ergoTreeVersion >= V6SoftForkVersion
-
-  /** True if v6.0 protocol is activated */
-  def isV6Activated: Boolean = activatedVersion >= V6SoftForkVersion
-}
-```
-
-### Version Constants
-
-```scala
-// From VersionContext.scala:47-56
-object VersionContext {
-  /** Maximum supported ErgoTree version (0, 1, 2, 3) */
-  val MaxSupportedScriptVersion: Byte = 3
-
-  /** JIT costing activation version (v5.0) */
-  val JitActivationVersion: Byte = 2
-
-  /** v6.0 soft-fork version */
-  val V6SoftForkVersion: Byte = 3
-}
-```
-
-### Version History
-
-| Block Version | Script Version | Protocol | Features |
-|---------------|----------------|----------|----------|
-| 1 | 0 | v3.x | Initial mainnet |
-| 2 | 1 | v4.x | Height monotonicity |
-| 3 | 2 | v5.x | JIT interpreter |
-| 4 | 3 | v6.x | Sub-blocks, new operations |
-
-### Thread-Local Context
-
-Version context is thread-local via `DynamicVariable`:
-
-```scala
-// From VersionContext.scala:68-100
-object VersionContext {
-  private val _versionContext: DynamicVariable[VersionContext] =
-    new DynamicVariable[VersionContext](_defaultContext)
-
-  /** Get current version context for this thread */
-  def current: VersionContext = {
-    val ctx = _versionContext.value
-    if (ctx == null)
-      throw new IllegalStateException("VersionContext not specified")
-    ctx
-  }
-
-  /** Execute block with specific version context */
-  def withVersions[T](activatedVersion: Byte, ergoTreeVersion: Byte)(block: => T): T =
-    _versionContext.withValue(VersionContext(activatedVersion, ergoTreeVersion))(block)
-
-  /** Verify current context matches expected versions */
-  def checkVersions(activatedVersion: Byte, ergoTreeVersion: Byte): Unit = {
-    val ctx = VersionContext.current
-    if (ctx.activatedVersion != activatedVersion || ctx.ergoTreeVersion != ergoTreeVersion) {
-      throw new IllegalStateException(s"Expected $expected but got $ctx")
+    pub fn init(activated: u8, tree: u8) !VersionContext {
+        // ergoTreeVersion must never exceed activatedVersion
+        if (activated >= JIT_ACTIVATION_VERSION and tree > activated) {
+            return error.InvalidVersionContext;
+        }
+        return .{
+            .activated_version = activated,
+            .ergo_tree_version = tree,
+        };
     }
-  }
+
+    /// True if JIT costing is activated (v5.0+)
+    pub fn isJitActivated(self: *const VersionContext) bool {
+        return self.activated_version >= JIT_ACTIVATION_VERSION;
+    }
+
+    /// True if v6.0 protocol is activated
+    pub fn isV6Activated(self: *const VersionContext) bool {
+        return self.activated_version >= V6_SOFT_FORK_VERSION;
+    }
+
+    /// True if v3+ ErgoTree version
+    pub fn isV3OrLaterErgoTree(self: *const VersionContext) bool {
+        return self.ergo_tree_version >= V6_SOFT_FORK_VERSION;
+    }
+};
+
+/// Thread-local version context
+threadlocal var current_context: ?VersionContext = null;
+
+pub fn withVersions(
+    activated: u8,
+    tree: u8,
+    comptime block: fn (*VersionContext) anyerror!void,
+) !void {
+    const ctx = try VersionContext.init(activated, tree);
+    const prev = current_context;
+    current_context = ctx;
+    defer current_context = prev;
+    try block(&ctx);
 }
+
+pub fn currentContext() !*const VersionContext {
+    return &(current_context orelse return error.VersionContextNotSet);
+}
+```
+
+## Version History
+
+```
+Protocol Version History
+══════════════════════════════════════════════════════════════════
+
+┌─────────────┬────────────────┬──────────────┬────────────────────┐
+│ Block Ver   │ Script Ver     │ Protocol     │ Features           │
+├─────────────┼────────────────┼──────────────┼────────────────────┤
+│ 1           │ 0              │ v3.x         │ Initial mainnet    │
+│ 2           │ 1              │ v4.x         │ Height monotonicity│
+│ 3           │ 2              │ v5.x         │ JIT interpreter    │
+│ 4           │ 3              │ v6.x         │ Sub-blocks, new ops│
+└─────────────┴────────────────┴──────────────┴────────────────────┘
+
+Relation: activated_script_version = block_version - 1
 ```
 
 ## Rule Status
 
-Validation rules can have different statuses:
+Validation rules have configurable status[^9][^10]:
 
-```scala
-// From RuleStatus.scala:4-53
-sealed trait RuleStatus {
-  def statusCode: Byte
-}
+```zig
+const RuleStatus = union(enum) {
+    /// Default: rule is active and enforced
+    enabled,
+    /// Rule is disabled (via voting)
+    disabled,
+    /// Rule replaced by new rule
+    replaced: struct { new_rule_id: u16 },
+    /// Rule parameters changed
+    changed: struct { new_value: []const u8 },
 
-object RuleStatus {
-  val EnabledRuleCode: Byte = 1
-  val DisabledRuleCode: Byte = 2
-  val ReplacedRuleCode: Byte = 3
-  val ChangedRuleCode: Byte = 4
-}
+    const StatusCode = enum(u8) {
+        enabled = 1,
+        disabled = 2,
+        replaced = 3,
+        changed = 4,
+    };
 
-/** Default: rule is active and enforced */
-case object EnabledRule extends RuleStatus {
-  val statusCode: Byte = RuleStatus.EnabledRuleCode
-}
-
-/** Rule is disabled (via voting) */
-case object DisabledRule extends RuleStatus {
-  val statusCode: Byte = RuleStatus.DisabledRuleCode
-}
-
-/** Rule replaced by new rule via soft-fork
-  * @param newRuleId ID of the replacement rule
-  */
-case class ReplacedRule(newRuleId: Short) extends RuleStatus {
-  val statusCode: Byte = RuleStatus.ReplacedRuleCode
-}
-
-/** Rule parameters changed via soft-fork
-  * @param newValue new configuration data
-  */
-case class ChangedRule(newValue: Array[Byte]) extends RuleStatus {
-  val statusCode: Byte = RuleStatus.ChangedRuleCode
-}
+    pub fn statusCode(self: RuleStatus) StatusCode {
+        return switch (self) {
+            .enabled => .enabled,
+            .disabled => .disabled,
+            .replaced => .replaced,
+            .changed => .changed,
+        };
+    }
+};
 ```
 
 ## Validation Rules
 
-### ValidationRule Base Class
+Rules define validation behavior with soft-fork support[^11][^12]:
 
-```scala
-// From ValidationRules.scala:13-51
-abstract case class ValidationRule(
-    id: Short,
-    description: String
-) extends SoftForkChecker {
-  protected def settings: SigmaValidationSettings
-  private var _checked: Boolean = false
+```zig
+const ValidationRule = struct {
+    id: u16,
+    description: []const u8,
+    soft_fork_checker: SoftForkChecker,
+    checked: bool = false,
 
-  /** Check rule is registered (HOTSPOT - only checked once) */
-  @inline protected final def checkRule(): Unit = {
-    if (!_checked) {
-      if (settings.getStatus(this.id).isEmpty) {
-        throw new SigmaException(s"ValidationRule $this not found")
-      }
-      _checked = true
+    pub fn checkRule(self: *ValidationRule, settings: *const ValidationSettings) !void {
+        if (!self.checked) {
+            if (settings.getStatus(self.id) == null) {
+                return error.ValidationRuleNotFound;
+            }
+            self.checked = true;
+        }
     }
-  }
 
-  /** Throw ValidationException with cause and args */
-  def throwValidationException(cause: Throwable, args: Seq[Any]): Nothing = {
-    if (cause.isInstanceOf[ValidationException]) {
-      throw cause
-    } else {
-      throw ValidationException(
-        s"Validation failed on $this with args $args",
-        this, args, Option(cause))
+    pub fn throwValidationException(
+        self: *const ValidationRule,
+        cause: anyerror,
+        args: []const u8,
+    ) ValidationError {
+        return ValidationError{
+            .rule = self,
+            .args = args,
+            .cause = cause,
+        };
     }
-  }
-}
+};
+
+const ValidationError = struct {
+    rule: *const ValidationRule,
+    args: []const u8,
+    cause: anyerror,
+};
 ```
 
-### ValidationException
+## Core Validation Rules
 
-```scala
-// From ValidationRules.scala:65-68
-case class ValidationException(
-    message: String,
-    rule: ValidationRule,
-    args: Seq[Any],
-    cause: Option[Throwable] = None
-) extends Exception(message, cause.orNull) {
-  // Skip stack trace for performance
-  override def fillInStackTrace(): Throwable = this
-}
-```
+```zig
+const ValidationRules = struct {
+    const FIRST_RULE_ID: u16 = 1000;
 
-### Core Validation Rules
+    /// Check primitive type code is valid
+    pub const CheckPrimitiveTypeCode = ValidationRule{
+        .id = 1007,
+        .description = "Check primitive type code is supported or added via soft-fork",
+        .soft_fork_checker = .code_added,
+    };
 
-```scala
-// From ValidationRules.scala:80-192
-object ValidationRules {
-  val FirstRuleId = 1000.toShort
+    /// Check non-primitive type code is valid
+    pub const CheckTypeCode = ValidationRule{
+        .id = 1008,
+        .description = "Check non-primitive type code is supported or added via soft-fork",
+        .soft_fork_checker = .code_added,
+    };
 
-  /** Check primitive type code is valid */
-  object CheckPrimitiveTypeCode extends ValidationRule(1007,
-    "Check the primitive type code is supported or added via soft-fork")
-      with SoftForkWhenCodeAdded {
-    final def apply[T](code: Byte): Unit = {
-      checkRule()
-      val ucode = toUByte(code)
-      if (ucode <= 0 || ucode >= embeddableIdToType.length) {
-        throwValidationException(
-          new SerializerException(s"Cannot deserialize type with code $ucode"),
-          Array(code))
-      }
-    }
-  }
+    /// Check data can be serialized for type
+    pub const CheckSerializableTypeCode = ValidationRule{
+        .id = 1009,
+        .description = "Check data values of type can be serialized",
+        .soft_fork_checker = .when_replaced,
+    };
 
-  /** Check non-primitive type code is valid */
-  object CheckTypeCode extends ValidationRule(1008,
-    "Check non-primitive type code is supported or added via soft-fork")
-      with SoftForkWhenCodeAdded {
-    final def apply[T](typeCode: Byte): Unit = {
-      checkRule()
-      val ucode = toUByte(typeCode)
-      if (ucode > toUByte(SGlobal.typeCode)) {
-        throwValidationException(
-          new SerializerException(s"Cannot deserialize type with code $ucode"),
-          Array(typeCode))
-      }
-    }
-  }
-
-  /** Check data can be serialized for type */
-  object CheckSerializableTypeCode extends ValidationRule(1009,
-    "Check data values of type can be serialized") with SoftForkWhenReplaced {
-    final def apply[T](typeCode: Byte): Unit = {
-      checkRule()
-      val ucode = toUByte(typeCode)
-      if (typeCode == SOption.OptionTypeCode || ucode > toUByte(TypeCodes.LastDataType)) {
-        throwValidationException(typeCode)
-      }
-    }
-  }
-
-  /** Check reader hasn't exceeded position limit */
-  object CheckPositionLimit extends ValidationRule(1014,
-    "Check Reader position limit") with SoftForkWhenReplaced {
-    final def apply(position: Int, positionLimit: Int): Unit = {
-      checkRule()
-      if (position > positionLimit) {
-        throwValidationException(position, positionLimit)
-      }
-    }
-  }
-}
-```
-
-### Version-Specific Rules
-
-Different rule sets for different protocol versions:
-
-```scala
-// From ValidationRules.scala:194-234
-private val ruleSpecsV5: Seq[ValidationRule] = Seq(
-  CheckPrimitiveTypeCode,
-  CheckTypeCode,
-  CheckSerializableTypeCode,
-  CheckTypeWithMethods,
-  CheckPositionLimit
-)
-
-private val ruleSpecsV6: Seq[ValidationRule] = Seq(
-  CheckPrimitiveTypeCodeV6,  // Updated for v6
-  CheckTypeCodeV6,           // Updated for v6
-  CheckSerializableTypeCode,
-  CheckTypeWithMethods,
-  CheckPositionLimit
-)
-
-def coreSettings: SigmaValidationSettings = {
-  if (VersionContext.current.isV6Activated) {
-    coreSettingsV6
-  } else {
-    coreSettingsV5
-  }
-}
+    /// Check reader position limit
+    pub const CheckPositionLimit = ValidationRule{
+        .id = 1014,
+        .description = "Check Reader position limit",
+        .soft_fork_checker = .when_replaced,
+    };
+};
 ```
 
 ## Soft-Fork Checkers
 
-### SoftForkChecker Trait
+Detect soft-fork conditions from validation failures[^13][^14]:
 
-```scala
-// From SoftForkChecker.scala:4-13
-trait SoftForkChecker {
-  /** Check if condition represents a soft-fork
-    * @param vs      Validation settings from blockchain
-    * @param ruleId  ID of rule that raised exception
-    * @param status  Rule status from blockchain
-    * @param args    Arguments that caused exception
-    * @return true if this is a valid soft-fork condition
-    */
-  def isSoftFork(vs: SigmaValidationSettings, ruleId: Short,
-                 status: RuleStatus, args: Seq[Any]): Boolean = false
-}
-```
+```zig
+const SoftForkChecker = enum {
+    none,
+    when_replaced,
+    code_added,
 
-### SoftForkWhenReplaced
-
-For rules that get replaced by new rules:
-
-```scala
-// From SoftForkChecker.scala:19-27
-trait SoftForkWhenReplaced extends SoftForkChecker {
-  override def isSoftFork(vs: SigmaValidationSettings,
-      ruleId: Short, status: RuleStatus, args: Seq[Any]): Boolean =
-    (status, args) match {
-      case (ReplacedRule(_), _) => true
-      case _ => false
+    pub fn isSoftFork(
+        self: SoftForkChecker,
+        settings: *const ValidationSettings,
+        rule_id: u16,
+        status: RuleStatus,
+        args: []const u8,
+    ) bool {
+        return switch (self) {
+            .none => false,
+            .when_replaced => switch (status) {
+                .replaced => true,
+                else => false,
+            },
+            .code_added => switch (status) {
+                .changed => |c| std.mem.indexOf(u8, c.new_value, args) != null,
+                else => false,
+            },
+        };
     }
-}
-```
-
-### SoftForkWhenCodeAdded
-
-For new opcodes/types added via soft-fork:
-
-```scala
-// From SoftForkChecker.scala:34-42
-trait SoftForkWhenCodeAdded extends SoftForkChecker {
-  override def isSoftFork(vs: SigmaValidationSettings,
-      ruleId: Short, status: RuleStatus, args: Seq[Any]): Boolean =
-    (status, args) match {
-      case (ChangedRule(newValue), Seq(code: Byte)) =>
-        newValue.contains(code)  // Code explicitly added to blockchain
-      case _ => false
-    }
-}
+};
 ```
 
 ## Validation Settings
 
-### SigmaValidationSettings
+Configurable settings from blockchain state[^15][^16]:
 
-```scala
-// From SigmaValidationSettings.scala:45-69
-abstract class SigmaValidationSettings
-    extends Iterable[(Short, (ValidationRule, RuleStatus))] {
+```zig
+const ValidationSettings = struct {
+    rules: std.AutoHashMap(u16, struct { rule: *ValidationRule, status: RuleStatus }),
 
-  def get(id: Short): Option[(ValidationRule, RuleStatus)]
-  def getStatus(id: Short): Option[RuleStatus]
-  def updated(id: Short, newStatus: RuleStatus): SigmaValidationSettings
-
-  /** Check if exception represents a soft-fork condition */
-  def isSoftFork(ve: ValidationException): Boolean = {
-    val ruleId = ve.rule.id
-    val infoOpt = get(ruleId)
-    infoOpt match {
-      // Don't tolerate replaced v5.0 rules after v6.0 activation
-      case Some((vr, ReplacedRule(_))) =>
-        if ((vr.id == 1011 || vr.id == 1007 || vr.id == 1008) &&
-            VersionContext.current.isV6Activated) {
-          false
-        } else {
-          true
+    pub fn getStatus(self: *const ValidationSettings, id: u16) ?RuleStatus {
+        if (self.rules.get(id)) |entry| {
+            return entry.status;
         }
-      case Some((rule, status)) =>
-        rule.isSoftFork(this, rule.id, status, ve.args)
-      case None => false
+        return null;
     }
-  }
-}
+
+    pub fn updated(self: *const ValidationSettings, id: u16, new_status: RuleStatus) !ValidationSettings {
+        var new_rules = try self.rules.clone();
+        if (new_rules.getPtr(id)) |entry| {
+            entry.status = new_status;
+        }
+        return .{ .rules = new_rules };
+    }
+
+    /// Check if exception represents a soft-fork condition
+    pub fn isSoftFork(self: *const ValidationSettings, ve: ValidationError) bool {
+        const entry = self.rules.get(ve.rule.id) orelse return false;
+
+        // Don't tolerate replaced v5.0 rules after v6.0 activation
+        switch (entry.status) {
+            .replaced => {
+                const ctx = currentContext() catch return false;
+                if (ctx.isV6Activated() and
+                    (ve.rule.id == 1011 or ve.rule.id == 1007 or ve.rule.id == 1008))
+                {
+                    return false;
+                }
+                return true;
+            },
+            else => return entry.rule.soft_fork_checker.isSoftFork(
+                self,
+                ve.rule.id,
+                entry.status,
+                ve.args,
+            ),
+        }
+    }
+};
 ```
 
-### MapSigmaValidationSettings
-
-```scala
-// From SigmaValidationSettings.scala:72-94
-sealed class MapSigmaValidationSettings(
-    private val map: Map[Short, (ValidationRule, RuleStatus)]
-) extends SigmaValidationSettings {
-
-  override def iterator: Iterator[(Short, (ValidationRule, RuleStatus))] =
-    map.iterator
-
-  override def get(id: Short): Option[(ValidationRule, RuleStatus)] =
-    map.get(id)
-
-  /** HOTSPOT: optimized status lookup */
-  override def getStatus(id: Short): Option[RuleStatus] = {
-    val statusOpt = map.get(id)
-    if (statusOpt.isDefined) Some(statusOpt.get._2) else None
-  }
-
-  override def updated(id: Short, newStatus: RuleStatus): MapSigmaValidationSettings = {
-    val (rule, _) = map(id)
-    new MapSigmaValidationSettings(map.updated(id, (rule, newStatus)))
-  }
-}
-```
-
-## Soft-Fork Handling
-
-### trySoftForkable
+## Soft-Fork Execution Wrapper
 
 Execute code with soft-fork fallback:
 
-```scala
-// From ValidationRules.scala:248-256
-def trySoftForkable[T](whenSoftFork: => T)(block: => T)
-                      (implicit vs: SigmaValidationSettings): T = {
-  try block
-  catch {
-    case ve: ValidationException =>
-      if (vs.isSoftFork(ve)) whenSoftFork
-      else throw ve
-  }
+```zig
+pub fn trySoftForkable(
+    comptime T: type,
+    settings: *const ValidationSettings,
+    when_soft_fork: T,
+    block: fn () anyerror!T,
+) T {
+    return block() catch |err| {
+        if (@errorCast(ValidationError, err)) |ve| {
+            if (settings.isSoftFork(ve)) {
+                return when_soft_fork;
+            }
+        }
+        return err;
+    };
 }
-```
 
-Usage example:
-
-```scala
-// When deserializing unknown opcode
-trySoftForkable(whenSoftFork = {
-  // Return placeholder for unknown operation
-  ConstantPlaceholder(0, SUnit)
-}) {
-  // Normal deserialization
-  ValueSerializer.deserialize(reader)
+// Usage: handling unknown opcodes
+fn deserializeValue(
+    reader: *Reader,
+    settings: *const ValidationSettings,
+) !Value {
+    return trySoftForkable(
+        Value,
+        settings,
+        // Soft-fork fallback: return unit placeholder
+        Value.unit,
+        // Normal deserialization
+        struct {
+            fn f() !Value {
+                const op_code = try reader.readByte();
+                const serializer = getSerializer(op_code) orelse
+                    return error.UnknownOpCode;
+                return serializer.parse(reader);
+            }
+        }.f,
+    );
 }
 ```
 
 ## AOT to JIT Transition
 
-The v5.0 soft-fork transitioned from AOT (Ahead-Of-Time) to JIT (Just-In-Time) costing.
-
-### Script Validation Rules
-
 ```
-Rule | BlockVer | Block Type | Script Ver | v4.0 Action      | v5.0 Action
------|----------|------------|------------|------------------|------------------
-1    | 1,2      | candidate  | v0/v1      | AOT-cost,verify  | AOT-cost,verify
-2    | 1,2      | mined      | v0/v1      | AOT-cost,verify  | AOT-cost,verify
-3    | 1,2      | candidate  | v2         | skip-pool-tx     | skip-pool-tx
-4    | 1,2      | mined      | v2         | skip-reject      | skip-reject
------|----------|------------|------------|------------------|------------------
-5    | 3        | candidate  | v0/v1      | skip-pool-tx     | JIT-verify
-6    | 3        | mined      | v0/v1      | skip-accept      | JIT-verify
-7    | 3        | candidate  | v2         | skip-pool-tx     | JIT-verify
-8    | 3        | mined      | v2         | skip-accept      | JIT-verify
+Script Validation Rules Across Versions
+══════════════════════════════════════════════════════════════════
+
+Rule │ Block │ Block Type │ Script │ v4.0 Action     │ v5.0 Action
+─────┼───────┼────────────┼────────┼─────────────────┼─────────────
+  1  │ 1,2   │ candidate  │ v0/v1  │ AOT-cost,verify │ AOT-cost,verify
+  2  │ 1,2   │ mined      │ v0/v1  │ AOT-cost,verify │ AOT-cost,verify
+  3  │ 1,2   │ candidate  │ v2     │ skip-pool-tx    │ skip-pool-tx
+  4  │ 1,2   │ mined      │ v2     │ skip-reject     │ skip-reject
+─────┼───────┼────────────┼────────┼─────────────────┼─────────────
+  5  │ 3     │ candidate  │ v0/v1  │ skip-pool-tx    │ JIT-verify
+  6  │ 3     │ mined      │ v0/v1  │ skip-accept     │ JIT-verify
+  7  │ 3     │ candidate  │ v2     │ skip-pool-tx    │ JIT-verify
+  8  │ 3     │ mined      │ v2     │ skip-accept     │ JIT-verify
+
+Actions:
+  AOT-cost,verify  Cost estimation + verification using v4.0 AOT
+  JIT-verify       Verification using v5.0 JIT interpreter
+  skip-pool-tx     Skip mempool transaction (can't handle)
+  skip-accept      Accept block without verification (trust majority)
+  skip-reject      Reject transaction/block (invalid version)
 ```
 
-### Validation Actions
+## Consensus Equivalence Properties
 
-| Action | Description |
-|--------|-------------|
-| AOT-cost,verify | Cost estimation and verification using v4.0 AOT interpreter |
-| JIT-verify | Verification using v5.0 JIT interpreter with just-in-time costing |
-| skip-pool-tx | Skip mempool transaction (can't handle) |
-| skip-accept | Accept block without verification (rely on majority) |
-| skip-reject | Reject transaction/block (invalid version) |
+For safe transition between interpreter versions:
 
-### Equivalence Properties
+```zig
+// Property 1: AOT-verify preserved between releases
+// forall s:ScriptV0/V1, R4.0-AOT-verify(s) == R5.0-AOT-verify(s)
 
-For consensus compatibility:
+// Property 2: AOT-cost preserved
+// forall s:ScriptV0/V1, R4.0-AOT-cost(s) == R5.0-AOT-cost(s)
 
-1. **Prop 1**: AOT-verify preserved between releases
-   ```
-   forall s:ScriptV0/V1, R4.0-AOT-verify(s) == R5.0-AOT-verify(s)
-   ```
+// Property 3: JIT can replace AOT
+// forall s:ScriptV0/V1, R5.0-JIT-verify(s) == R4.0-AOT-verify(s)
 
-2. **Prop 2**: AOT-cost preserved
-   ```
-   forall s:ScriptV0/V1, R4.0-AOT-cost(s) == R5.0-AOT-cost(s)
-   ```
+// Property 4: JIT cost bounded by AOT
+// forall s:ScriptV0/V1, R5.0-JIT-cost(s) <= R4.0-AOT-cost(s)
 
-3. **Prop 3**: JIT can replace AOT
-   ```
-   forall s:ScriptV0/V1, R5.0-JIT-verify(s) == R4.0-AOT-verify(s)
-   ```
+// Property 5: ScriptV2 rejected before soft-fork
+// forall s:ScriptV2, if not SF active => reject
+```
 
-4. **Prop 4**: JIT cost bounded by AOT
-   ```
-   forall s:ScriptV0/V1, R5.0-JIT-cost(s) <= R4.0-AOT-cost(s)
-   ```
+## Version-Aware Interpreter
 
-5. **Prop 5**: ScriptV2 rejected before SF
-   ```
-   forall s:ScriptV2, if not SF active => reject
-   ```
+```zig
+pub fn verify(
+    ergo_tree: *const ErgoTree,
+    ctx: *const Context,
+) !bool {
+    const script_version = ergo_tree.header.version;
+    const activated_version = ctx.activatedScriptVersion();
 
-## Version Context Usage
-
-### In Interpreter
-
-```scala
-def verify(ergoTree: ErgoTree, ctx: ErgoLikeContext): Boolean = {
-  val scriptVersion = ergoTree.version
-  val activatedVersion = ctx.activatedScriptVersion
-
-  VersionContext.withVersions(activatedVersion, scriptVersion) {
     // Execute with proper version context
-    val reduced = fullReduction(ergoTree, ctx, env)
-    verifySignature(reduced, ctx.messageToSign)
-  }
+    var version_ctx = try VersionContext.init(
+        activated_version.toU8(),
+        script_version.toU8(),
+    );
+
+    const prev = current_context;
+    current_context = version_ctx;
+    defer current_context = prev;
+
+    // Version-specific execution
+    if (version_ctx.isJitActivated()) {
+        return verifyJit(ergo_tree, ctx);
+    } else {
+        return verifyAot(ergo_tree, ctx);
+    }
 }
-```
 
-### In Serialization
-
-```scala
-def deserializeErgoTree(bytes: Array[Byte]): ErgoTree = {
-  val header = bytes(0)
-  val treeVersion = ErgoTree.getVersion(header)
-
-  VersionContext.withVersions(
-    VersionContext.current.activatedVersion,
-    treeVersion
-  ) {
-    // Deserialize with tree's version context
-    ErgoTreeSerializer.deserialize(bytes)
-  }
+fn verifyJit(tree: *const ErgoTree, ctx: *const Context) !bool {
+    const reduced = try fullReduction(tree, ctx);
+    return verifySignature(reduced, ctx.messageToSign());
 }
-```
 
-### Version Checks
-
-```scala
-// Only available in v6.0+
-def someV6Operation(): Value[SType] = {
-  if (!VersionContext.current.isV6Activated) {
-    throw new InterpreterException("Operation requires v6.0")
-  }
-  // ... implementation
+fn verifyAot(tree: *const ErgoTree, ctx: *const Context) !bool {
+    // Legacy AOT interpreter path
+    const result = try aotEvaluate(tree, ctx);
+    return verifySignature(result, ctx.messageToSign());
 }
 ```
 
 ## Block Extension Voting
 
-Rule statuses can be changed via blockchain extension sections:
+Rule status changes via blockchain extension voting:
 
 ```
-Extension Key    | Extension Value
------------------|--------------------
-Rule ID (2 bytes)| RuleStatus + data
+Extension Voting Flow
+══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Block Extension Section                       │
+│                                                                  │
+│  Key (2 bytes)    │    Value                                    │
+│  ─────────────────┼──────────────────────────────────────────── │
+│  Rule ID          │    RuleStatus + data                        │
+│  0x03EF (1007)    │    ChangedRule([0x5A, 0x5B])               │
+│                   │    (new opcodes 0x5A, 0x5B allowed)        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Voting Epoch                                  │
+│                                                                  │
+│  Epoch 1:    □ □ □ ■ □ ■ ■ □ ■ ■   (5/10 = 50%)               │
+│  Epoch 2:    ■ ■ □ ■ ■ ■ □ ■ ■ ■   (8/10 = 80%)               │
+│  Epoch 3:    ■ ■ ■ ■ ■ □ ■ ■ ■ ■   (9/10 = 90%) → ACTIVATED   │
+└─────────────────────────────────────────────────────────────────┘
+
+New Opcode Addition:
+  1. Before soft-fork: Unknown opcode → ValidationException
+  2. Extension update: ChangedRule(Array(newOpcode)) for rule 1001
+  3. After activation: Old nodes recognize soft-fork via SoftForkWhenCodeAdded
+  4. Result: Old nodes skip verification; new nodes execute new opcode
 ```
 
-### Status Update Flow
+## Unknown Opcode Handling
 
-1. Miners include votes in block extensions
-2. Votes accumulate over voting epoch
-3. When threshold reached, status changes
-4. New status applies to subsequent blocks
+```zig
+fn handleUnknownOpcode(
+    reader: *Reader,
+    settings: *const ValidationSettings,
+    op_code: u8,
+) !Expr {
+    // Check if this is a soft-fork condition
+    const rule = &ValidationRules.CheckTypeCode;
+    const status = settings.getStatus(rule.id) orelse return error.RuleNotFound;
 
-### Example: Adding New Opcode
-
-1. **Before soft-fork**: Unknown opcode throws `ValidationException`
-2. **Extension update**: `ChangedRule(Array(newOpcode))` for rule 1001
-3. **After activation**: Old nodes recognize soft-fork condition via `SoftForkWhenCodeAdded`
-4. **Result**: Old nodes skip verification; new nodes execute new opcode
-
-## Practical Implications
-
-### For Node Operators
-
-- **Old nodes** can stay in sync by trusting majority
-- **Upgrade recommended** for full validation
-- **No emergency** - network remains functional
-
-### For Developers
-
-- Use `VersionContext.current` to check available features
-- Wrap new operations in version checks
-- Test against multiple protocol versions
-
-### For Scripts
-
-```
-// Script version in ErgoTree header
-Version | Features
---------|----------
-0       | Initial (v3.x)
-1       | Height monotonicity (v4.x)
-2       | JIT interpreter (v5.x)
-3       | Sub-blocks, new ops (v6.x)
-```
-
-## Code Example
-
-Handling unknown opcodes with soft-fork:
-
-```scala
-import sigma.validation.ValidationRules._
-import sigma.validation.{SigmaValidationSettings, ValidationException}
-
-def deserializeValue(reader: SigmaByteReader)
-                    (implicit vs: SigmaValidationSettings): Value[SType] = {
-  val opCode = reader.getByte()
-
-  trySoftForkable(
-    whenSoftFork = {
-      // Unknown opcode - return placeholder for old nodes
-      reader.position = reader.positionLimit  // Skip remaining bytes
-      UnitConstant  // Treat as unit (will fail signature check safely)
+    switch (status) {
+        .changed => |c| {
+            // Check if opcode was added via soft-fork
+            if (std.mem.indexOfScalar(u8, c.new_value, op_code) != null) {
+                // Soft-fork: skip remaining bytes, return placeholder
+                reader.skipToEnd();
+                return Expr{ .constant = Constant.unit };
+            }
+        },
+        else => {},
     }
-  ) {
-    // Normal deserialization
-    val serializer = getSerializer(opCode)
-    serializer.parse(reader)
-  }
+
+    // Not a soft-fork condition - fail hard
+    return rule.throwValidationException(error.UnknownOpCode, &[_]u8{op_code});
 }
 ```
 
-## Exercises
-
-1. **Analysis**: Trace through what happens when a v4.0 node encounters a v2 script in a mined block after soft-fork activation.
-
-2. **Design**: How would you add a new primitive type via soft-fork? What rule changes are needed?
-
-3. **Implementation**: Write a version-aware operation that behaves differently in v5.0 vs v6.0.
-
-4. **Security**: Why is it important that old nodes can't be tricked into accepting invalid blocks via soft-fork?
-
 ## Summary
 
-- **VersionContext** tracks activated protocol and ErgoTree versions per thread
-- **ValidationRules** define configurable validation with soft-fork support
-- **RuleStatus** can be `Enabled`, `Disabled`, `Replaced`, or `Changed`
-- **SoftForkChecker** traits detect soft-fork conditions from exceptions
+- **ErgoTreeVersion** encodes script version in 3-bit header field (0-7)
+- **VersionContext** tracks activated protocol and tree versions
+- **RuleStatus** can be Enabled, Disabled, Replaced, or Changed
+- **SoftForkChecker** detects soft-fork conditions from validation failures
 - **trySoftForkable** provides graceful fallback for unknown constructs
 - **AOT→JIT transition** demonstrated soft-fork for major interpreter change
-- **Old nodes** remain compatible by trusting majority on blocks they can't verify
-
-## Further Reading
-
-- Source: `core/shared/src/main/scala/sigma/VersionContext.scala`
-- Source: `core/shared/src/main/scala/sigma/validation/`
-- Documentation: `docs/aot-jit-switch.md`
-- EIP-37 (Sub-blocks): https://github.com/ergoplatform/eips/pull/37
+- **Block extension voting** enables parameter changes via miner consensus
+- **Old nodes** remain compatible by trusting majority on unverifiable blocks
 
 ---
-*[Previous: Chapter 28](../part9/ch28-key-derivation.md) | [Next: Chapter 30](./ch30-cross-platform-support.md)*
+
+*Next: [Chapter 30: Cross-Platform Support](./ch30-cross-platform-support.md)*
+
+[^1]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala:17-35`
+
+[^2]: Rust: `ergotree-ir/src/chain/context.rs:46-53`
+
+[^3]: Scala: `core/shared/src/main/scala/sigma/ast/ErgoTree.scala` (header)
+
+[^4]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:122-145`
+
+[^5]: Scala: `core/shared/src/main/scala/sigma/ast/ErgoTree.scala:57-84`
+
+[^6]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:27-109`
+
+[^7]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala:47-56`
+
+[^8]: Rust: `ergotree-ir/src/chain/context.rs:12-54`
+
+[^9]: Scala: `core/shared/src/main/scala/sigma/validation/RuleStatus.scala:4-53`
+
+[^10]: Rust: Not directly present in sigma-rust; validation handled at higher level
+
+[^11]: Scala: `core/shared/src/main/scala/sigma/validation/ValidationRules.scala:13-51`
+
+[^12]: Rust: Validation rules embedded in deserializer implementations
+
+[^13]: Scala: `core/shared/src/main/scala/sigma/validation/SoftForkChecker.scala:4-42`
+
+[^14]: Rust: Soft-fork handling at application level (ergo-lib)
+
+[^15]: Scala: `core/shared/src/main/scala/sigma/validation/SigmaValidationSettings.scala:45-69`
+
+[^16]: Rust: `ergo-lib/src/chain/parameters.rs` (blockchain parameters)
