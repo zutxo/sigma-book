@@ -28,9 +28,9 @@ Compilation Pipelines
 ─────────────────────────────────────────────────────
 
 Scala (Graph IR):
-┌─────────┐   GraphBuilding   ┌──────────┐   TreeBuilding   ┌──────────┐
+┌─────────┐   GraphBuilding   ┌──────────┐   TreeBuilding    ┌──────────┐
 │ Typed   │ ─────────────────>│ Graph IR │ ─────────────────>│ Optimized│
-│ AST     │   (+ CSE)         │ (Def/Ref)│   (ValDef min)   │ ErgoTree │
+│ AST     │   (+ CSE)         │ (Def/Ref)│   (ValDef min)    │ ErgoTree │
 └─────────┘                   └──────────┘                   └──────────┘
                                    │
                                    │ DefRewriting
@@ -38,7 +38,7 @@ Scala (Graph IR):
                                    ▼
 
 Rust (Direct):
-┌─────────┐   Lower    ┌──────────┐   Lower    ┌──────────┐   Check    ┌──────────┐
+┌─────────┐   Lower    ┌──────────┐   Lower    ┌──────────┐   Check   ┌──────────┐
 │ HIR     │ ─────────> │ Bound    │ ─────────> │ Typed    │ ─────────>│ MIR/     │
 │ (parse) │            │ HIR      │            │ HIR      │           │ ErgoTree │
 └─────────┘            └──────────┘            └──────────┘           └──────────┘

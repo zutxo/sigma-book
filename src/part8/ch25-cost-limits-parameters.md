@@ -213,9 +213,9 @@ pub fn defaultParameters() Parameters {
 
 ```
 Default Parameter Values
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────
 ID   Name                Default      Min        Max        Step
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────
 1    storageFeeFactor    1,250,000    0          2,500,000  25,000
 2    minValuePerByte     360          0          10,000     10
 3    maxBlockSize        524,288      16,384     1,048,576  1%
@@ -226,7 +226,7 @@ ID   Name                Default      Min        Max        Step
 8    outputCost          100          -          -          1%
 9    subblocksPerBlock   30           2          2,048      1
 123  blockVersion        1            1          -          -
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────
 ```
 
 ## Voting Mechanism
@@ -363,7 +363,7 @@ Transaction cost formula[^5][^6]:
 
 ```
 Cost Formula
-─────────────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────
 
 totalCost = interpreterInitCost        // 10,000
           + inputs × inputCost         // inputs × 2,000
@@ -373,13 +373,13 @@ totalCost = interpreterInitCost        // 10,000
           + scriptExecutionCost        // varies per script
 
 Example (2 inputs, 1 data input, 3 outputs, 50K script):
-─────────────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────
   10,000  interpreter init
    4,000  2 × 2,000 inputs
      100  1 × 100 data inputs
      300  3 × 100 outputs
   50,000  script execution
-─────────────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────
   64,400  TOTAL
 ```
 
@@ -420,14 +420,14 @@ pub fn estimateBlockCapacity(params: *const Parameters) u32 {
 
 ```
 Protocol Versions
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 Block Version   Protocol   Features
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 1               v1         Initial mainnet
 2               v5.0       Script improvements
 3               v5.0.12    Height monotonicity (EIP-39)
 4               v6.0       Sub-blocks, new operations
-─────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 
 Script version = block_version - 1
 ```
@@ -488,9 +488,9 @@ const ValidationRules = struct {
 
 ```
 Rule Categories
-─────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────
 Category              Can Disable?  Examples
-─────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────
 Consensus Critical    No            txErgPreservation
                                     txScriptValidation
                                     txNoInputs
@@ -501,7 +501,7 @@ Soft-Forkable         Yes           txDust
 
 Version-Gated         N/A           txNegHeight (v2+)
                                     txMonotonicHeight (v3+)
-─────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────
 ```
 
 ```zig

@@ -29,19 +29,19 @@ Performance Critical Paths
 ══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Transaction Flow                              │
-│                                                                  │
+│                    Transaction Flow                             │
+│                                                                 │
 │   Block (1000+ txs)                                             │
 │       │                                                         │
-│       ├── Tx 1: 3 inputs × (deserialize + evaluate + verify)   │
-│       ├── Tx 2: 1 input × (deserialize + evaluate + verify)    │
-│       ├── Tx 3: 5 inputs × (deserialize + evaluate + verify)   │
+│       ├── Tx 1: 3 inputs × (deserialize + evaluate + verify)    │
+│       ├── Tx 2: 1 input × (deserialize + evaluate + verify)     │
+│       ├── Tx 3: 5 inputs × (deserialize + evaluate + verify)    │
 │       └── ...                                                   │
-│                                                                  │
+│                                                                 │
 │   Hot paths (per input):                                        │
-│     • Deserialization: ~50-200 opcode parses                   │
-│     • Evaluation: ~100-500 operations                          │
-│     • Proof verification: 1-10 EC operations                   │
+│     • Deserialization: ~50-200 opcode parses                    │
+│     • Evaluation: ~100-500 operations                           │
+│     • Proof verification: 1-10 EC operations                    │
 └─────────────────────────────────────────────────────────────────┘
 
 Performance Targets:
@@ -138,8 +138,8 @@ Struct of Arrays (SoA):
 ┌──────────────────────────────────────────────────────────────────┐
 │ Tags Cache Line (64 bytes)                                       │
 ├──────────────────────────────────────────────────────────────────┤
-│ T[0] T[1] T[2] ... T[63]                                        │
-│ 64 tags in single cache line                                    │
+│ T[0] T[1] T[2] ... T[63]                                         │
+│ 64 tags in single cache line                                     │
 └──────────────────────────────────────────────────────────────────┘
 Tag iteration: 100% cache utilization (64 values per fetch)
 

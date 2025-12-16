@@ -120,8 +120,8 @@ const HeaderType = packed struct(u8) {
 ## Binary Format
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                            ErgoTree                               │
+┌──────────────────────────────────────────────────────────────────┐
+│                            ErgoTree                              │
 ├─────────┬─────────────┬──────────────────┬───────────────────────┤
 │ Header  │ [Size]      │ [Constants]      │ Root Expression       │
 │ 1 byte  │ VLQ (opt)   │ Array (opt)      │ Serialized tree       │

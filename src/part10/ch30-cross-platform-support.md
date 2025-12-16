@@ -28,21 +28,10 @@ Cross-Compilation Targets
 ══════════════════════════════════════════════════════════════════
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Host Build System                             │
-│                                                                  │
+│                    Host Build System                            │
+│                                                                 │
 │   zig build -Dtarget=<target>                                   │
 └────────────────────────┬────────────────────────────────────────┘
-                         │
-         ┌───────────────┼───────────────┐
-         │               │               │
-         ▼               ▼               ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ Native      │  │ WASM        │  │ Embedded    │
-│             │  │             │  │             │
-│ x86_64-linux│  │ wasm32-wasi │  │ arm-none    │
-│ aarch64-macos│ │ wasm32-freestanding│ │ riscv32│
-│ x86_64-windows│└─────────────┘  └─────────────┘
-└─────────────┘
 
 Common Targets:
   x86_64-linux-gnu       Linux desktop/server
@@ -521,10 +510,10 @@ Platform Performance Characteristics
 ┌─────────────────┬───────────────────────────────────────────────┐
 │ Platform        │ Characteristics                               │
 ├─────────────────┼───────────────────────────────────────────────┤
-│ Native (x86_64) │ ✓ SIMD acceleration (AVX2/AVX512)            │
+│ Native (x86_64) │ ✓ SIMD acceleration (AVX2/AVX512)             │
 │                 │ ✓ Hardware AES-NI                             │
-│                 │ ✓ Large memory, fast allocation              │
-│                 │ ✓ Multi-threaded execution                   │
+│                 │ ✓ Large memory, fast allocation               │
+│                 │ ✓ Multi-threaded execution                    │
 ├─────────────────┼───────────────────────────────────────────────┤
 │ Native (ARM64)  │ ✓ NEON SIMD                                   │
 │                 │ ✓ Hardware crypto extensions                  │
@@ -532,12 +521,12 @@ Platform Performance Characteristics
 ├─────────────────┼───────────────────────────────────────────────┤
 │ WASM (browser)  │ ○ Single-threaded (mostly)                    │
 │                 │ ○ Linear memory model                         │
-│                 │ ✓ JIT compilation by browser                 │
-│                 │ ○ No direct filesystem/network               │
+│                 │ ✓ JIT compilation by browser                  │
+│                 │ ○ No direct filesystem/network                │
 ├─────────────────┼───────────────────────────────────────────────┤
 │ WASI (Node.js)  │ ○ Single-threaded                             │
-│                 │ ✓ WASI syscalls for I/O                      │
-│                 │ ✓ Sandboxed execution                        │
+│                 │ ✓ WASI syscalls for I/O                       │
+│                 │ ✓ Sandboxed execution                         │
 └─────────────────┴───────────────────────────────────────────────┘
 
 Optimization Strategies:

@@ -486,22 +486,22 @@ Period: 262,144 blocks ≈ 4 years (at 2 min/block)
 Expired Box Spending:
 ┌─────────────────────────────────────────────────────┐
 │ IF:                                                 │
-│   current_height - box.creation_height >= 262,144  │
-│   AND proof.isEmpty()                              │
-│   AND extension.contains(STORAGE_INDEX_VAR)        │
-│ THEN:                                              │
-│   Check recreation rules instead of script         │
+│   current_height - box.creation_height >= 262,144   │
+│   AND proof.isEmpty()                               │
+│   AND extension.contains(STORAGE_INDEX_VAR)         │
+│ THEN:                                               │
+│   Check recreation rules instead of script          │
 └─────────────────────────────────────────────────────┘
 
 Recreation Rules:
 ┌─────────────────────────────────────────────────────┐
-│ output.creation_height == current_height           │
-│ output.value >= box.value - storage_fee            │
-│ output.R1 == box.R1  (script preserved)            │
-│ output.R2 == box.R2  (tokens preserved)            │
-│ output.R4-R9 == box.R4-R9  (registers preserved)   │
-│                                                    │
-│ storage_fee = storage_fee_factor * box.bytes.len   │
+│ output.creation_height == current_height            │
+│ output.value >= box.value - storage_fee             │
+│ output.R1 == box.R1  (script preserved)             │
+│ output.R2 == box.R2  (tokens preserved)             │
+│ output.R4-R9 == box.R4-R9  (registers preserved)    │
+│                                                     │
+│ storage_fee = storage_fee_factor * box.bytes.len    │
 └─────────────────────────────────────────────────────┘
 ```
 

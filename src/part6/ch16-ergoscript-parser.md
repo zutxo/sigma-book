@@ -36,7 +36,7 @@ Source Code
 │                                                  │
 │  Characters ─────> Tokens                        │
 │  "val x = 1 + 2"                                 │
-│  ─────>  [ValKw, Ident("x"), Eq, Int(1),        │
+│  ─────>  [ValKw, Ident("x"), Eq, Int(1),         │
 │           Plus, Int(2)]                          │
 └──────────────────────────────────────────────────┘
     │
@@ -46,7 +46,7 @@ Source Code
 │                                                  │
 │  Tokens ─────> AST                               │
 │  Grammar rules, precedence, associativity        │
-│  ─────>  ValDef("x", BinOp(Int(1), +, Int(2)))  │
+│  ─────>  ValDef("x", BinOp(Int(1), +, Int(2)))   │
 └──────────────────────────────────────────────────┘
     │
     ▼

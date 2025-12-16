@@ -28,19 +28,19 @@ SDK Layer Architecture
 ══════════════════════════════════════════════════════════════════
 
 ┌────────────────────────────────────────────────────────────────┐
-│                     Application Layer                           │
+│                     Application Layer                          │
 │   TxBuilder    BoxSelector    ErgoBoxCandidateBuilder          │
 ├────────────────────────────────────────────────────────────────┤
-│                     Wallet Layer                                │
+│                     Wallet Layer                               │
 │   Wallet    TransactionContext    TransactionHintsBag          │
 ├────────────────────────────────────────────────────────────────┤
-│                     Reduction Layer                             │
+│                     Reduction Layer                            │
 │   reduce_tx()    ReducedTransaction    ReducedInput            │
 ├────────────────────────────────────────────────────────────────┤
-│                     Signing Layer                               │
+│                     Signing Layer                              │
 │   sign_transaction()    sign_reduced_transaction()             │
 ├────────────────────────────────────────────────────────────────┤
-│                     Interpreter Layer                           │
+│                     Interpreter Layer                          │
 │   Prover    Verifier    reduce_to_crypto()                     │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -537,10 +537,10 @@ Signing Flow
         │  reduce_tx()          │  sign_reduced_tx()    │
         │  (needs context)      │  (context-free)       │
         ▼                       ▼                       ▼
-   ┌─────────┐            ┌─────────┐            ┌─────────┐
-   │ Online  │            │ Offline │            │ Verify  │
-   │ Wallet  │            │ Wallet  │            │ Node    │
-   └─────────┘            └─────────┘            └─────────┘
+   ┌─────────┐            ┌─────────┐              ┌─────────┐
+   │ Online  │            │ Offline │              │ Verify  │
+   │ Wallet  │            │ Wallet  │              │ Node    │
+   └─────────┘            └─────────┘              └─────────┘
 ```
 
 Transaction signing with optional hints[^15][^16]:

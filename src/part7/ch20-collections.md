@@ -409,19 +409,19 @@ Structure-of-Arrays vs Array-of-Structures
 
 Array-of-Structures (standard):
 ┌────────────────────────────────────────────────────┐
-│ [(L0,R0), (L1,R1), (L2,R2), (L3,R3), (L4,R4)]     │
+│ [(L0,R0), (L1,R1), (L2,R2), (L3,R3), (L4,R4)]      │
 │                                                    │
-│ Memory: L0 R0 L1 R1 L2 R2 L3 R3 L4 R4             │
-│ Issue: Cache unfriendly when accessing only Ls    │
+│ Memory: L0 R0 L1 R1 L2 R2 L3 R3 L4 R4              │
+│ Issue: Cache unfriendly when accessing only Ls     │
 └────────────────────────────────────────────────────┘
 
 Structure-of-Arrays (PairColl):
 ┌────────────────────────────────────────────────────┐
-│ ls: [L0, L1, L2, L3, L4]                          │
-│ rs: [R0, R1, R2, R3, R4]                          │
+│ ls: [L0, L1, L2, L3, L4]                           │
+│ rs: [R0, R1, R2, R3, R4]                           │
 │                                                    │
-│ Memory: L0 L1 L2 L3 L4 | R0 R1 R2 R3 R4           │
-│ Benefit: Cache friendly, O(1) unzip               │
+│ Memory: L0 L1 L2 L3 L4 | R0 R1 R2 R3 R4            │
+│ Benefit: Cache friendly, O(1) unzip                │
 └────────────────────────────────────────────────────┘
 ```
 

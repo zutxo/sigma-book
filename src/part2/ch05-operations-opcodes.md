@@ -24,8 +24,8 @@ Every ErgoTree operation is identified by a single-byte opcode[^1][^2]:
 
 ```
 Opcode Space Layout:
-┌─────────────────────────────────────────────────────────┐
-│ 0x00       │ Reserved (Undefined)                       │
+┌────────────────────────────────────────────────────────┐
+│ 0x00       │ Reserved (Undefined)                      │
 ├────────────┼───────────────────────────────────────────┤
 │ 0x01-0x70  │ Constant type codes (optimized encoding)  │
 ├────────────┼───────────────────────────────────────────┤

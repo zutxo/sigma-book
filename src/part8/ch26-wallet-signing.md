@@ -25,29 +25,29 @@ The wallet bridges high-level operations with the interpreter layer[^1][^2]:
 
 ```
 Wallet Service Architecture
-─────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────
 
-┌─────────────────────────────────────────────────────┐
-│                   Wallet                            │
-├─────────────────────────────────────────────────────┤
-│  prover: Box<dyn Prover>                            │
-│                                                     │
-│  ├── from_mnemonic(phrase, pass) -> Wallet          │
-│  ├── from_secrets([]SecretKey) -> Wallet            │
-│  ├── add_secret(SecretKey)                          │
-│  │                                                  │
-│  ├── sign_transaction(...) -> Transaction           │
-│  ├── sign_reduced_transaction(...) -> Transaction   │
-│  │                                                  │
-│  └── generate_commitments(...) -> TransactionHintsBag│
-└─────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                   Wallet                               │
+├────────────────────────────────────────────────────────┤
+│  prover: Box<dyn Prover>                               │
+│                                                        │
+│  ├── from_mnemonic(phrase, pass) -> Wallet             │
+│  ├── from_secrets([]SecretKey) -> Wallet               │
+│  ├── add_secret(SecretKey)                             │
+│  │                                                     │
+│  ├── sign_transaction(...) -> Transaction              │
+│  ├── sign_reduced_transaction(...) -> Transaction      │
+│  │                                                     │
+│  └── generate_commitments(...) -> TransactionHintsBag  │
+└────────────────────────────────────────────────────────┘
                         │
                         │ uses
                         ▼
-┌─────────────────────────────────────────────────────┐
-│                    Prover                           │
-│  prove(tree, ctx, message, hints) -> ProverResult   │
-└─────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                    Prover                              │
+│  prove(tree, ctx, message, hints) -> ProverResult      │
+└────────────────────────────────────────────────────────┘
 ```
 
 ## Wallet Structure

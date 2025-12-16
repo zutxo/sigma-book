@@ -55,7 +55,7 @@ Source: "sigmaProp(SELF.value > 1000L)"
                        ▼
 ┌─────────────────────────────────────────────────────┐
 │ Graph IR (CSE applied)                              │
-│ s1=Self, s2=s1.value, s3=1000L, s4=GT(s2,s3)       │
+│ s1=Self, s2=s1.value, s3=1000L, s4=GT(s2,s3)        │
 │ s5=sigmaProp(s4)                                    │
 └─────────────────────────────────────────────────────┘
                        │
