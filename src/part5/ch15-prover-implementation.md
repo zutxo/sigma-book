@@ -786,10 +786,13 @@ const RealSecretProof = struct {
 
 const OwnCommitment = struct {
     image: SigmaBoolean,
-    secret_randomness: Scalar,  // Private!
+    secret_randomness: Scalar,  // PRIVATE - NEVER share!
     commitment: FirstProverMessage,
     position: NodePosition,
 };
+// SECURITY: OwnCommitment contains secret randomness (r). NEVER send
+// OwnCommitment to other parties - only send RealCommitment (public part).
+// Leaking r allows computing secret key w = (z - r) / e.
 
 const RealCommitment = struct {
     image: SigmaBoolean,

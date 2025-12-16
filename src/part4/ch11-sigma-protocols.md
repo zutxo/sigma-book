@@ -430,11 +430,14 @@ const GF2_192 = struct {
     }
 
     // Multiplication uses polynomial representation with reduction
+    // NOTE: This is a stub. Full implementation requires:
+    // 1. Carry-less multiplication of 192-bit polynomials
+    // 2. Reduction modulo irreducible polynomial x^192 + x^7 + x^2 + x + 1
+    // See sigma-rust: ergotree-interpreter/src/sigma_protocol/gf2_192.rs
     pub fn mul(a: *const GF2_192, b: *const GF2_192) GF2_192 {
-        // ... polynomial multiplication mod irreducible
         _ = a;
         _ = b;
-        return .{ .words = .{ 0, 0, 0 } };
+        @compileError("GF2_192.mul() not implemented - see reference implementations");
     }
 };
 
@@ -454,6 +457,8 @@ const GF2_192_Poly = struct {
     }
 
     /// Lagrange interpolation through given points
+    /// NOTE: Stub - full implementation requires GF2_192 arithmetic
+    /// See sigma-rust: ergotree-interpreter/src/sigma_protocol/gf2_192_poly.rs
     pub fn interpolate(
         points: []const u8,
         values: []const GF2_192,
@@ -464,9 +469,12 @@ const GF2_192_Poly = struct {
         _ = points;
         _ = values;
         _ = value_at_0;
-        return undefined;
+        @compileError("GF2_192_Poly.interpolate() not implemented");
     }
 };
+
+// NOTE: In production, all scalar operations (add, mul, negate) must be
+// constant-time to prevent timing side-channel attacks. See ZIGMA_STYLE.md.
 ```
 
 ## Proof Trees

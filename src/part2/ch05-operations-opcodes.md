@@ -250,7 +250,11 @@ const ArithOp = struct {
     }
 };
 
-fn arithPlus(x: Any, y: Any, tpe: SType) Any {
+fn arithPlus(x: Any, y: Any, tpe: SType) !Any {
+    // NOTE: ErgoTree arithmetic uses modular (wrapping) semantics for primitives.
+    // The +% operator in Zig performs wrapping addition, matching this behavior.
+    // In production, use @addWithOverflow for explicit overflow detection when
+    // the application requires overflow errors. See ZIGMA_STYLE.md.
     return switch (tpe) {
         .byte => .{ .byte = x.byte +% y.byte },
         .short => .{ .short = x.short +% y.short },

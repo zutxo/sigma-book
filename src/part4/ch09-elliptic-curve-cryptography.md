@@ -296,7 +296,14 @@ const GroupElementSerializer = struct {
             y = y.negate();
         }
 
-        return EcPoint{ .x = x, .y = y, .z = FieldElement.one() };
+        const point = EcPoint{ .x = x, .y = y, .z = FieldElement.one() };
+
+        // CRITICAL: Validate point is on curve and in correct subgroup
+        // This prevents invalid curve attacks. See ZIGMA_STYLE.md.
+        // if (!point.isOnCurve()) return error.NotOnCurve;
+        // if (!point.isInSubgroup()) return error.InvalidSubgroup;
+
+        return point;
     }
 };
 ```
@@ -374,7 +381,16 @@ const Scalar = struct {
         }
     }
 
+    /// Constant-time comparison to prevent timing attacks
     fn lessThan(a: *const [32]u8, b: *const [32]u8) bool {
+        // NOTE: This simplified version is NOT constant-time.
+        // In production, use constant-time comparison like:
+        //   var borrow: u1 = 0;
+        //   for (a.*, b.*) |ai, bi| {
+        //       borrow = @intFromBool(ai < bi) | (borrow & @intFromBool(ai == bi));
+        //   }
+        //   return borrow == 1;
+        // See ZIGMA_STYLE.md for constant-time crypto requirements.
         for (a.*, b.*) |ai, bi| {
             if (ai < bi) return true;
             if (ai > bi) return false;

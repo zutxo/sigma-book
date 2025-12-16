@@ -158,11 +158,18 @@ const ErgoTreeSerializer = struct {
         var constants: []Constant = &.{};
         if (header.constant_segregation) {
             const count = try readVlq(reader);
+            // Bounds check: prevent DoS via excessive allocation
+            const MAX_CONSTANTS: u32 = 4096;
+            if (count > MAX_CONSTANTS) {
+                return error.TooManyConstants;
+            }
             constants = try allocator.alloc(Constant, count);
             for (constants) |*c| {
                 c.* = try Constant.deserialize(reader);
             }
         }
+        // NOTE: In production, use a pre-allocated pool instead of dynamic
+        // allocation during deserialization. See ZIGMA_STYLE.md.
 
         // 5. Read root expression
         const root = try Expr.deserialize(reader);
@@ -221,6 +228,8 @@ pub fn substConstants(
         else => root.*,
     };
 }
+// NOTE: In production, use an iterative approach with an explicit work stack
+// to guarantee bounded stack depth and prevent stack overflow on deep trees.
 ```
 
 ## Version Mechanism

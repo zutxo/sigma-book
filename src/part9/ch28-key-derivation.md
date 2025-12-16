@@ -297,8 +297,10 @@ const ExtSecretKey = struct {
     }
 
     /// Zero out key material
+    /// SECURITY: In production, use volatile write or std.crypto.utils.secureZero
+    /// to prevent compiler optimization from eliding the zeroing.
     pub fn zeroSecret(self: *ExtSecretKey) void {
-        @memset(&self.key_bytes, 0);
+        std.crypto.utils.secureZero(u8, &self.key_bytes);
     }
 };
 ```

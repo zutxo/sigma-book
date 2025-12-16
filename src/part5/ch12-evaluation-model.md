@@ -125,6 +125,11 @@ const Env = struct {
     }
 
     /// Create new environment with additional binding
+    /// NOTE: This implementation clones the HashMap on every extend() call.
+    /// In production, use a pre-allocated binding stack with O(1) extend/pop:
+    ///   bindings: [MAX_BINDINGS]Binding (pre-allocated)
+    ///   stack_ptr: usize (grows/shrinks without allocation)
+    /// See ZIGMA_STYLE.md for zero-allocation evaluation patterns.
     pub fn extend(self: *const Env, val_id: u32, value: Value) !Env {
         var new_env = Env{
             .bindings = try self.bindings.clone(),
@@ -164,6 +169,12 @@ const Expr = union(enum) {
     bin_op: BinOp,
     // ... other expression types
 
+    /// Evaluate expression recursively
+    /// NOTE: This recursive approach is clear for learning but uses the call
+    /// stack. In production, use an explicit work stack to:
+    /// 1. Guarantee bounded stack depth (no stack overflow)
+    /// 2. Enable O(1) reset between transactions
+    /// See ZIGMA_STYLE.md for iterative evaluation patterns.
     pub fn eval(self: *const Expr, env: *const Env, E: *Evaluator) !Value {
         return switch (self.*) {
             .constant => |c| c.eval(env, E),

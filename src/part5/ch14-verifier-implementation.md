@@ -270,6 +270,8 @@ fn checkCommitments(
     const expected_challenge = fiatShamirHashFn(buf.items);
 
     // Compare with actual challenge
+    // NOTE: In production, use constant-time comparison for challenge bytes
+    // to prevent timing side-channels: std.crypto.utils.timingSafeEql
     return std.mem.eql(u8, &new_root.challenge(), &expected_challenge);
 }
 ```

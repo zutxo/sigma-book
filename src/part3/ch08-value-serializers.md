@@ -288,6 +288,8 @@ For collections of expressions[^9]:
 
 ```zig
 const CollectionSerializer = struct {
+    const MAX_COLLECTION_ITEMS: u16 = 4096;  // DoS protection
+
     pub fn serialize(coll: *const Collection, w: *SigmaByteWriter) !void {
         try w.putUShort(@intCast(coll.items.len));  // Count
         try TypeSerializer.serialize(coll.elem_type, w);  // Element type
@@ -298,6 +300,8 @@ const CollectionSerializer = struct {
 
     pub fn deserialize(r: *SigmaByteReader) !Expr {
         const count = try r.getUShort();
+        if (count > MAX_COLLECTION_ITEMS) return error.CollectionTooLarge;
+
         const elem_type = try TypeSerializer.deserialize(r);
 
         var items = try r.allocator.alloc(*Expr, count);
@@ -311,6 +315,8 @@ const CollectionSerializer = struct {
         } };
     }
 };
+// NOTE: In production, use a pre-allocated expression pool instead of
+// dynamic allocation during deserialization. See ZIGMA_STYLE.md.
 ```
 
 ### Boolean Collection Constant

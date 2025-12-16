@@ -300,6 +300,8 @@ const Typer = struct {
             },
 
             // Block: extend environment with each binding
+            // NOTE: In production, use a binding stack instead of cloning HashMap
+            // for each scope. See ZIGMA_STYLE.md for zero-allocation patterns.
             .block => |block| blk: {
                 var cur_env = env.clone();
                 var new_bindings = try self.allocator.alloc(ValDef, block.bindings.len);

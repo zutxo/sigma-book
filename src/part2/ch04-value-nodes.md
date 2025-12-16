@@ -205,6 +205,10 @@ const ConstantPlaceholder = struct {
     pub const COST = FixedCost{ .value = 1 }; // Cheaper than Constant
 
     pub fn eval(self: *const ConstantPlaceholder, _: *const DataEnv, E: *Evaluator) !Any {
+        // Bounds check first (prevents out-of-bounds access)
+        if (self.index >= E.constants.len) {
+            return error.ConstantIndexOutOfBounds;
+        }
         const c = E.constants[self.index];
         E.addCost(COST, OpCode.ConstantPlaceholder);
 
@@ -261,6 +265,8 @@ const ConcreteCollection = struct {
         return result;
     }
 };
+// NOTE: In production, use a pre-allocated value pool to avoid dynamic
+// allocation during evaluation. See ZIGMA_STYLE.md memory management section.
 ```
 
 ## Tuple Values

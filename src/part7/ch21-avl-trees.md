@@ -326,13 +326,18 @@ const AvlTreeVerifier = struct {
     }
 
     fn verifyLookup(self: *AvlTreeVerifier, key: []const u8) !?[]const u8 {
-        // Verify traversal path matches proof
-        // Return value if found, null if not found
+        // NOTE: Stub - full implementation requires:
+        // 1. Read node type from proof (leaf vs internal)
+        // 2. Compare key with node key
+        // 3. Follow proof path based on comparison result
+        // 4. Verify all hashes match computed values
+        // See scorex-util: BatchAVLVerifier for reference.
         _ = self;
         _ = key;
-        // Implementation uses proof bytes to reconstruct path
-        return null;
+        @compileError("verifyLookup not implemented - see reference implementations");
     }
+    // SECURITY: Key comparisons in production must be constant-time to prevent
+    // timing attacks that could leak key values. Use std.crypto.utils.timingSafeEql.
 
     fn updateDigestFromProof(self: *AvlTreeVerifier) void {
         // Extract new digest from proof processing

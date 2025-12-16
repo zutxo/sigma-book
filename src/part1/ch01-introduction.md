@@ -122,6 +122,7 @@ const SigmaBoolean = union(enum) {
     cthreshold: Cthreshold,          // k-of-n threshold
     trivial: TrivialProp,            // True/False
 
+    /// Count nodes in proposition tree
     pub fn size(self: SigmaBoolean) usize {
         return switch (self) {
             .prove_dlog, .prove_dh_tuple, .trivial => 1,
@@ -130,6 +131,8 @@ const SigmaBoolean = union(enum) {
             .cthreshold => |c| 1 + totalChildrenSize(c.children),
         };
     }
+    // NOTE: In production, use an explicit work stack instead of recursion
+    // to guarantee bounded stack depth. See ZIGMA_STYLE.md.
 };
 
 const ProveDlog = struct {
@@ -173,13 +176,13 @@ Ergo uses the UTXO model where **boxes** are the fundamental units:
 
 ```zig
 const Box = struct {
-    value: i64,                          // nanoERGs
-    ergo_tree: ErgoTree,                 // Spending condition
-    tokens: []const Token,               // Additional assets
-    registers: [10]?Constant,            // R0-R9 (R0-R3 mandatory)
-    creation_height: u32,
-    tx_id: [32]u8,
-    output_index: u16,
+    value: i64,                          // nanoERGs (R0)
+    ergo_tree: ErgoTree,                 // Spending condition (R1)
+    tokens: []const Token,               // Additional assets (R2)
+    creation_height: u32,                // Part of creation info (R3)
+    tx_id: [32]u8,                       // Part of creation info (R3)
+    output_index: u16,                   // Part of creation info (R3)
+    additional_registers: [6]?Constant,  // R4-R9 (user-defined, optional)
 
     pub fn id(self: *const Box) [32]u8 {
         // Blake2b256(tx_id || output_index || serialized_content)
@@ -190,6 +193,7 @@ const Box = struct {
         return hasher.finalResult();
     }
 };
+// NOTE: R0-R3 are computed from box fields; only R4-R9 are stored explicitly.
 ```
 
 ## The Prover/Verifier Model

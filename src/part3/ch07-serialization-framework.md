@@ -95,11 +95,16 @@ const VlqEncoder = struct {
     }
 
     /// Read unsigned integer using VLQ decoding
+    /// Maximum 10 bytes for u64 (ceil(64/7) = 10)
     pub fn getUInt(reader: anytype) !u64 {
+        const MAX_VLQ_BYTES: u6 = 10;  // ceil(64/7) = 10 bytes max
         var result: u64 = 0;
         var shift: u6 = 0;
+        var byte_count: u6 = 0;
         while (shift < 64) {
             const b = try reader.readByte();
+            byte_count += 1;
+            if (byte_count > MAX_VLQ_BYTES) return error.VlqTooLong;
             result |= @as(u64, b & 0x7F) << shift;
             if ((b & 0x80) == 0) return result;
             shift += 7;
@@ -107,6 +112,8 @@ const VlqEncoder = struct {
         return error.VlqDecodingFailed;
     }
 };
+// NOTE: In production, VLQ decoding should use compile-time assertions to
+// verify max byte counts. See ZIGMA_STYLE.md for bounded iteration patterns.
 ```
 
 ### VLQ Size by Value Range
