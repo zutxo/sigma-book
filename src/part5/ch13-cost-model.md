@@ -8,18 +8,22 @@
 
 ## Prerequisites
 
-- Evaluation model ([Chapter 12](./ch12-evaluation-model.md))
-- Operations ([Chapter 5](../part2/ch05-operations-opcodes.md))
-- Computational complexity basics
+- [Chapter 12](./ch12-evaluation-model.md) for the evaluation architecture and how costs are accumulated during eval
+- [Chapter 5](../part2/ch05-operations-opcodes.md) for operation categories and cost descriptor types
+- Basic computational complexity: understanding of constant-time vs linear-time operations
 
 ## Learning Objectives
 
-- Understand JitCost scaling and block cost conversion
-- Master cost descriptors: FixedCost, PerItemCost, TypeBasedCost
-- Implement cost accumulation with limit enforcement
-- Work with cost tracing and profiling
+By the end of this chapter, you will be able to:
+
+- Explain JitCost scaling (10x) and conversion to/from block costs
+- Apply the three cost descriptor types: `FixedCost`, `PerItemCost`, and `TypeBasedCost`
+- Implement cost accumulation with limit enforcement to prevent denial-of-service attacks
+- Use cost tracing to analyze script execution costs
 
 ## Cost Model Purpose
+
+Unlike Turing-complete smart contract platforms that can enter infinite loops, ErgoTree scripts must terminate within bounded resources. The cost model assigns a computational cost to every operation, accumulating these costs during evaluation. If the accumulated cost exceeds the block limit, execution fails—this guarantees that all scripts terminate and prevents attackers from crafting expensive scripts that slow down block validation.
 
 ErgoTree scripts execute in a resource-constrained environment[^1][^2]:
 
@@ -588,41 +592,42 @@ pub fn evaluateWithCost(
 
 ## Summary
 
-- **JitCost** uses 10x scaling from block costs for finer granularity
-- **FixedCost** for constant-time operations (constants, variable access)
-- **PerItemCost** formula: `baseCost + ceil(n/chunkSize) × perChunkCost`
-- **TypeBasedCost** for type-dependent costs (numeric casts, comparisons)
-- **DynamicCost** for complex operations computed at runtime
-- **CostAccumulator** tracks costs and enforces limits
-- **CostItem** types enable detailed cost tracing
-- Cost limits checked after each operation; exceeding returns error
+This chapter covered the cost model that ensures all ErgoTree scripts terminate within bounded resources:
+
+- **JitCost** uses 10x scaling from block costs, providing finer granularity for internal calculations while maintaining integer arithmetic without floating point
+- **FixedCost** applies to constant-time operations like variable access (cost = 5) and conditionals (cost = 10)
+- **PerItemCost** models operations that scale with input size using the formula: `baseCost + ceil(n/chunkSize) × perChunkCost`—this applies to collection operations and hash functions
+- **TypeBasedCost** handles operations whose cost depends on operand type—BigInt operations are more expensive than primitive integer operations
+- **CostAccumulator** tracks accumulated costs during evaluation and checks against the limit after each operation; exceeding the limit immediately fails evaluation
+- **CostItem** types (`FixedCostItem`, `SeqCostItem`, `TypeBasedCostItem`) enable detailed cost tracing for debugging and optimization
+- The **PowHit** cost function handles the special case of Autolykos2 mining operations
 
 ---
 
 *Next: [Chapter 14: Verifier Implementation](./ch14-verifier-implementation.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/JitCost.scala:3-7`
+[^1]: Scala: [`JitCost.scala:3-7`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/JitCost.scala#L3-L7)
 
-[^2]: Rust: `ergotree-interpreter/src/eval/cost_accum.rs:1-12`
+[^2]: Rust: [`cost_accum.rs:1-12`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/cost_accum.rs#L1-L12)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/JitCost.scala:9-36`
+[^3]: Scala: [`JitCost.scala:9-36`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/JitCost.scala#L9-L36)
 
-[^4]: Scala: `data/shared/src/main/scala/sigma/ast/CostKind.scala:10-55`
+[^4]: Scala: [`CostKind.scala:10-55`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/CostKind.scala#L10-L55)
 
-[^5]: Rust: `ergotree-interpreter/src/eval/costs.rs:1-24`
+[^5]: Rust: [`costs.rs:1-24`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/costs.rs#L1-L24)
 
-[^6]: Scala: `data/shared/src/main/scala/sigma/ast/CostKind.scala:60-66`
+[^6]: Scala: [`CostKind.scala:60-66`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/CostKind.scala#L60-L66)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/ast/CostItem.scala:3-78`
+[^7]: Scala: [`CostItem.scala:3-78`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/CostItem.scala#L3-L78)
 
-[^8]: Rust: `ergotree-interpreter/src/eval/cost_accum.rs:13-17`
+[^8]: Rust: [`cost_accum.rs:13-17`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/cost_accum.rs#L13-L17)
 
-[^9]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/CostAccumulator.scala:7-79`
+[^9]: Scala: [`CostAccumulator.scala:7-79`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/CostAccumulator.scala#L7-L79)
 
-[^10]: Rust: `ergotree-interpreter/src/eval/cost_accum.rs:19-43`
+[^10]: Rust: [`cost_accum.rs:19-43`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/cost_accum.rs#L19-L43)
 
-[^11]: Scala: `data/shared/src/main/scala/sigma/eval/ErgoTreeEvaluator.scala:18-86`
+[^11]: Scala: [`ErgoTreeEvaluator.scala:18-86`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/eval/ErgoTreeEvaluator.scala#L18-L86)
 
-[^12]: Rust: `ergotree-interpreter/src/eval.rs:130-160`
+[^12]: Rust: [`eval.rs:130-160`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs#L130-L160)
 
-[^13]: Scala: `data/shared/src/main/scala/sigma/ast/CostKind.scala:71-88`
+[^13]: Scala: [`CostKind.scala:71-88`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/CostKind.scala#L71-L88)

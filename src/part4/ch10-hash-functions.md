@@ -8,19 +8,22 @@
 
 ## Prerequisites
 
-- Cryptographic hash function concepts
-- Prior chapters: Elliptic curves ([Chapter 9](./ch09-elliptic-curve-cryptography.md)), Operations ([Chapter 5](../part2/ch05-operations-opcodes.md))
+- Cryptographic hash function properties: collision resistance, preimage resistance, deterministic output
+- Understanding of message authentication codes (MACs) and their role in key derivation
+- Prior chapters: [Chapter 9](./ch09-elliptic-curve-cryptography.md) for the cryptographic context, [Chapter 5](../part2/ch05-operations-opcodes.md) for opcode-based operations
 
 ## Learning Objectives
 
-- Understand BLAKE2b256 and SHA-256 in ErgoScript
-- Implement hash operations with per-item costing
-- Master Fiat-Shamir challenge generation
-- Work with key derivation (HMAC-SHA512)
+By the end of this chapter, you will be able to:
+
+- Explain why BLAKE2b256 is the primary hash function in Ergo and when SHA-256 is used
+- Implement hash operations with per-item costing based on block size
+- Describe Fiat-Shamir challenge generation and why challenges are truncated to 192 bits
+- Use HMAC-SHA512 for BIP32/BIP39 key derivation
 
 ## Hash Functions in Sigma
 
-Hash functions serve multiple purposes in the protocol[^1][^2]:
+Hash functions are fundamental to blockchain security—they provide integrity guarantees, enable content addressing, and transform interactive proofs into non-interactive ones via the Fiat-Shamir heuristic. The Sigma protocol uses two primary hash functions, each optimized for different use cases[^1][^2]:
 
 ```
 Hash Function Uses
@@ -432,35 +435,37 @@ pub fn computeBoxId(box_bytes: []const u8) [32]u8 {
 
 ## Summary
 
-- **BLAKE2b256** is the primary hash—fast and 3x cheaper than SHA-256
-- **SHA-256** available for external compatibility
-- **Fiat-Shamir** uses truncated hash (192 bits) for challenge generation
-- **Per-item costing** accounts for variable input sizes
-- **HMAC-SHA512** handles BIP32/BIP39 key derivation
-- Block sizes differ: BLAKE2b=128, SHA-256=64
+This chapter covered the hash functions that provide cryptographic integrity throughout the Sigma protocol:
+
+- **BLAKE2b256** is the primary hash function—approximately 3x cheaper than SHA-256 due to its larger block size (128 bytes vs 64 bytes) and optimized design
+- **SHA-256** is available for external system compatibility (Bitcoin scripts, cross-chain verification)
+- **Fiat-Shamir challenge generation** uses BLAKE2b256 truncated to 192 bits, matching the threshold signature polynomial field size while satisfying the constraint 2^192 < group_order
+- **Per-item costing** calculates hash cost as `base + ceil(input_length / block_size) * per_chunk`, accurately reflecting the computational work
+- **HMAC-SHA512** provides key derivation for BIP32/BIP39 wallet compatibility, using the standard "Bitcoin seed" key
+- **Box IDs** are computed as BLAKE2b256 hashes of serialized box content, providing content-addressable identification
 
 ---
 
 *Next: [Chapter 11: Sigma Protocols](./ch11-sigma-protocols.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/CryptoFunctions.scala`
+[^1]: Scala: [`CryptoFunctions.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/CryptoFunctions.scala)
 
-[^2]: Rust: `sigma-util/src/hash.rs:5-26`
+[^2]: Rust: [`hash.rs:5-26`](https://github.com/ergoplatform/sigma-rust/blob/develop/sigma-util/src/hash.rs#L5-L26)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (CalcBlake2b256)
+[^3]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (CalcBlake2b256)
 
-[^4]: Rust: `ergotree-ir/src/mir/calc_blake2b256.rs:14-47`
+[^4]: Rust: [`calc_blake2b256.rs:14-47`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/calc_blake2b256.rs#L14-L47)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (CalcSha256)
+[^5]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (CalcSha256)
 
-[^6]: Rust: `ergotree-ir/src/mir/calc_sha256.rs`
+[^6]: Rust: [`calc_sha256.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/calc_sha256.rs)
 
-[^7]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/CryptoFunctions.scala:hashFn`
+[^7]: Scala: [`CryptoFunctions.scala:hashFn`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/CryptoFunctions.scala)
 
-[^8]: Rust: `ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs:70-76`
+[^8]: Rust: [`fiat_shamir.rs:70-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs#L70-L76)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala:70-75`
+[^9]: Scala: [`CryptoConstants.scala:70-75`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala#L70-L75)
 
-[^10]: Rust: `ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs:116-203`
+[^10]: Rust: [`fiat_shamir.rs:116-203`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs#L116-L203)
 
-[^11]: Scala: `core/jvm/src/main/scala/sigma/crypto/HmacSHA512.scala`
+[^11]: Scala: [`HmacSHA512.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/jvm/src/main/scala/sigma/crypto/HmacSHA512.scala)

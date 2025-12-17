@@ -449,6 +449,6 @@ const OpCodeConstants = struct {
 
 *[Previous: Appendix A](./appendix-a-type-codes.md) | [Next: Appendix C](./appendix-c-costs.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/OpCodes.scala`
+[^1]: Scala: [`OpCodes.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/OpCodes.scala)
 
-[^2]: Rust: `ergotree-ir/src/serialization/op_code.rs:14-203`
+[^2]: Rust: [`op_code.rs:14-203`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/op_code.rs#L14-L203)

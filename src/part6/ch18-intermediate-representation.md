@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Semantic analysis ([Chapter 17](./ch17-semantic-analysis.md))
-- Typed AST structure and type descriptors
-- Prior chapters: Operations ([Chapter 5](../part2/ch05-operations-opcodes.md))
+- [Chapter 17](./ch17-semantic-analysis.md) for the typed AST that feeds into IR construction
+- [Chapter 5](../part2/ch05-operations-opcodes.md) for operation codes that IR nodes map to
+- Understanding of compiler optimization concepts: CSE, dead code elimination
 
 ## Learning Objectives
 
-- Understand graph-based IR design and Def/Ref pattern
-- Implement common subexpression elimination (CSE)
-- Master graph rewriting for optimizations
-- Trace AST → Graph → Tree transformations
+By the end of this chapter, you will be able to:
+
+- Explain the graph-based IR design using the Def/Ref pattern
+- Implement common subexpression elimination (CSE) via hash-consing
+- Apply graph rewriting for algebraic simplifications
+- Trace the AST → Graph IR → Optimized Tree transformations
 
 ## IR Architecture Overview
 
@@ -690,34 +692,34 @@ Node s2 has multiple uses → ValDef introduced
 
 *Next: [Chapter 19: Compiler Pipeline](./ch19-compiler-pipeline.md)*
 
-[^1]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala`
+[^1]: Scala: [`IRContext.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala)
 
-[^2]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/Base.scala:17-200` (Node, Def, Ref)
+[^2]: Scala: [`Base.scala:17-200`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/Base.scala#L17-L200) (Node, Def, Ref)
 
-[^3]: Rust: `ergoscript-compiler/src/compiler.rs:59-76` (compile pipeline)
+[^3]: Rust: [`compiler.rs:59-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L59-L76) (compile pipeline)
 
-[^4]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/Base.scala:100-160` (Def trait)
+[^4]: Scala: [`Base.scala:100-160`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/Base.scala#L100-L160) (Def trait)
 
-[^5]: Rust: `ergoscript-compiler/src/hir.rs:32-37` (Expr struct)
+[^5]: Rust: [`hir.rs:32-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/hir.rs#L32-L37) (Expr struct)
 
-[^6]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala:28-50` (cake pattern)
+[^6]: Scala: [`IRContext.scala:28-50`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala#L28-L50) (cake pattern)
 
-[^7]: Rust: `ergoscript-compiler/src/compiler.rs:78-87` (compile_hir)
+[^7]: Rust: [`compiler.rs:78-87`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L78-L87) (compile_hir)
 
-[^8]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/GraphBuilding.scala:28-35` (CSE documentation)
+[^8]: Scala: [`GraphBuilding.scala:28-35`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/GraphBuilding.scala#L28-L35) (CSE documentation)
 
-[^9]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala:105-150` (rewriteDef)
+[^9]: Scala: [`IRContext.scala:105-150`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/IRContext.scala#L105-L150) (rewriteDef)
 
-[^10]: Rust: `ergoscript-compiler/src/hir/rewrite.rs:10-29` (rewrite function)
+[^10]: Rust: [`rewrite.rs:10-29`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/hir/rewrite.rs#L10-L29) (rewrite function)
 
-[^11]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/GraphBuilding.scala:75-120` (HasSigmas, AllOf)
+[^11]: Scala: [`GraphBuilding.scala:75-120`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/GraphBuilding.scala#L75-L120) (HasSigmas, AllOf)
 
-[^12]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala:21-50` (TreeBuilding trait)
+[^12]: Scala: [`TreeBuilding.scala:21-50`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala#L21-L50) (TreeBuilding trait)
 
-[^13]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala:60-100` (IsArithOp, IsRelationOp)
+[^13]: Scala: [`TreeBuilding.scala:60-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala#L60-L100) (IsArithOp, IsRelationOp)
 
-[^14]: Scala: `sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala:100-140` (IsContextProperty)
+[^14]: Scala: [`TreeBuilding.scala:100-140`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/ir/TreeBuilding.scala#L100-L140) (IsContextProperty)
 
-[^15]: Rust: `ergoscript-compiler/src/hir.rs:146-167` (ExprKind enum)
+[^15]: Rust: [`hir.rs:146-167`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/hir.rs#L146-L167) (ExprKind enum)
 
-[^16]: Rust: `ergoscript-compiler/src/hir.rs:61-94` (Expr::lower)
+[^16]: Rust: [`hir.rs:61-94`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/hir.rs#L61-L94) (Expr::lower)

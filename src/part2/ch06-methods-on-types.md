@@ -8,20 +8,24 @@
 
 ## Prerequisites
 
-- Method dispatch concepts
-- Type hierarchies
-- Prior chapters: [Chapter 2](../part1/ch02-type-system.md), [Chapter 5](./ch05-operations-opcodes.md)
+- Understanding of method dispatch—how method calls are resolved to specific implementations based on the receiver type
+- Familiarity with type hierarchies and how types can share common method interfaces
+- Prior chapters: [Chapter 2](../part1/ch02-type-system.md) for type codes used in method resolution, [Chapter 5](./ch05-operations-opcodes.md) for operations vs methods distinction
 
 ## Learning Objectives
 
-- Understand method organization via MethodsContainer
-- Use methods on numeric, collection, box, and crypto types
-- Understand method resolution and lookup
-- Access context and blockchain state through methods
+By the end of this chapter, you will be able to:
+
+- Explain how methods are organized via `MethodsContainer` and resolved by type code and method ID
+- Use methods on numeric, collection, box, and cryptographic types
+- Describe the method resolution process from `MethodCall` to method implementation
+- Access transaction context and blockchain state through context methods
 
 ## Method Architecture
 
-Methods are organized through a `MethodsContainer` system[^1][^2]:
+While Chapter 5 covered standalone operations (arithmetic, comparisons, etc.), ErgoTree also supports methods—operations that belong to specific types. The distinction matters for serialization: operations use opcodes directly, while method calls serialize a type code, method ID, and arguments. This design allows types to have rich APIs without consuming the limited opcode space.
+
+Methods are organized through a `MethodsContainer` system that groups related methods by their receiver type[^1][^2]:
 
 ```
 Method Organization
@@ -590,40 +594,42 @@ const MethodCall = struct {
 
 ## Summary
 
-- Methods organized via `MethodsContainer` per type
-- Each method has unique ID within its type (1-255)
-- Numeric types share conversion and bitwise methods
-- Collections have rich transformation API (map, filter, fold, etc.)
-- Box methods access value, tokens, registers
-- Context methods access transaction data
-- v6 adds bitwise and byte representation methods for numerics
+This chapter covered the method system that extends ErgoTree types with rich APIs:
+
+- **`MethodsContainer`** organizes methods per type, with each method having a unique ID (1-255) within its container
+- **Method resolution** uses the receiver's type code and the method ID to locate the implementation, avoiding opcode space consumption
+- **Numeric methods** provide type conversions (`toByte`, `toInt`, `toLong`, `toBigInt`) shared across all numeric types, with v6 adding bitwise operations and byte representation
+- **Collection methods** form the richest API with transformation (`map`, `filter`, `fold`), predicates (`exists`, `forall`), and combination operations (`append`, `slice`, `zip`)
+- **Box methods** access UTXO properties: `value` (nanoERGs), `tokens`, `propositionBytes`, and registers R0-R9
+- **Context methods** provide access to transaction data: `INPUTS`, `OUTPUTS`, `HEIGHT`, `SELF`, `dataInputs`, `headers`, and context variables via `getVar`
+- **Cryptographic methods** on `GroupElement` support elliptic curve operations (`exp`, `multiply`, `negate`) and `SigmaProp` provides `propBytes` for serialization
 
 ---
 
 *Next: [Chapter 7: Serialization Framework](../part3/ch07-serialization-framework.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala`
+[^1]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala)
 
-[^2]: Rust: `ergotree-ir/src/types/smethod.rs:36-99` (SMethod, SMethodDesc)
+[^2]: Rust: [`smethod.rs:36-99`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/smethod.rs#L36-L99) (SMethod, SMethodDesc)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:232-500`
+[^3]: Scala: [`methods.scala:232-500`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala#L232-L500)
 
-[^4]: Rust: `ergotree-ir/src/types/snumeric.rs`
+[^4]: Rust: [`snumeric.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/snumeric.rs)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:805-1260`
+[^5]: Scala: [`methods.scala:805-1260`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala#L805-L1260)
 
-[^6]: Rust: `ergotree-ir/src/types/scoll.rs:22-266` (METHOD_DESC, method IDs)
+[^6]: Rust: [`scoll.rs:22-266`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/scoll.rs#L22-L266) (METHOD_DESC, method IDs)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SBoxMethods)
+[^7]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SBoxMethods)
 
-[^8]: Rust: `ergotree-ir/src/types/sbox.rs:29-92` (VALUE_METHOD, GET_REG_METHOD, TOKENS_METHOD)
+[^8]: Rust: [`sbox.rs:29-92`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sbox.rs#L29-L92) (VALUE_METHOD, GET_REG_METHOD, TOKENS_METHOD)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SContextMethods)
+[^9]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SContextMethods)
 
-[^10]: Rust: `ergotree-ir/src/types/scontext.rs`
+[^10]: Rust: [`scontext.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/scontext.rs)
 
-[^11]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SGroupElementMethods)
+[^11]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SGroupElementMethods)
 
-[^12]: Rust: `ergotree-ir/src/types/sgroup_elem.rs`
+[^12]: Rust: [`sgroup_elem.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sgroup_elem.rs)
 
-[^13]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SSigmaPropMethods)
+[^13]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SSigmaPropMethods)

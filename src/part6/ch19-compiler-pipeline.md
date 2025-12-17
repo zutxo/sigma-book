@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Parser ([Chapter 16](./ch16-ergoscript-parser.md))
-- Semantic analysis ([Chapter 17](./ch17-semantic-analysis.md))
-- Intermediate representation ([Chapter 18](./ch18-intermediate-representation.md))
+- [Chapter 16](./ch16-ergoscript-parser.md) for parsing ErgoScript to AST
+- [Chapter 17](./ch17-semantic-analysis.md) for name binding and type inference
+- [Chapter 18](./ch18-intermediate-representation.md) for IR optimization passes
 
 ## Learning Objectives
 
-- Understand the complete compilation pipeline
-- Implement the SigmaCompiler API
-- Master method call lowering strategies
-- Trace end-to-end compilation
+By the end of this chapter, you will be able to:
+
+- Trace the complete compilation pipeline from ErgoScript source to ErgoTree bytecode
+- Use the `SigmaCompiler` API to compile scripts programmatically
+- Explain method call lowering strategies and when direct operations are used
+- Configure compiler settings for different networks (mainnet vs testnet)
 
 ## Pipeline Architecture
 
@@ -659,28 +661,28 @@ Phase 5 - BuildTree:
 
 *Next: [Chapter 20: Collections](../part7/ch20-collections.md)*
 
-[^1]: Scala: `sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala:51-100` (SigmaCompiler class)
+[^1]: Scala: [`SigmaCompiler.scala:51-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala#L51-L100) (SigmaCompiler class)
 
-[^2]: Rust: `ergoscript-compiler/src/lib.rs:16-27` (module structure)
+[^2]: Rust: [`lib.rs:16-27`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/lib.rs#L16-L27) (module structure)
 
-[^3]: Scala: `sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala:15-25` (CompilerSettings)
+[^3]: Scala: [`SigmaCompiler.scala:15-25`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala#L15-L25) (CompilerSettings)
 
-[^4]: Scala: `sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala:55-95` (compile methods)
+[^4]: Scala: [`SigmaCompiler.scala:55-95`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala#L55-L95) (compile methods)
 
-[^5]: Rust: `ergoscript-compiler/src/compiler.rs:59-76` (compile_expr)
+[^5]: Rust: [`compiler.rs:59-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L59-L76) (compile_expr)
 
-[^6]: Rust: `ergoscript-compiler/src/compiler.rs:73-76` (compile)
+[^6]: Rust: [`compiler.rs:73-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L73-L76) (compile)
 
-[^7]: Rust: `ergoscript-compiler/src/compiler.rs:78-87` (compile_hir)
+[^7]: Rust: [`compiler.rs:78-87`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L78-L87) (compile_hir)
 
-[^8]: Scala: `sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala:105-150` (unlowerMethodCalls)
+[^8]: Scala: [`SigmaCompiler.scala:105-150`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/SigmaCompiler.scala#L105-L150) (unlowerMethodCalls)
 
-[^9]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala:30-45` (processGlobalMethod)
+[^9]: Scala: [`SigmaTyper.scala:30-45`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala#L30-L45) (processGlobalMethod)
 
-[^10]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala:50-100` (assignType)
+[^10]: Scala: [`SigmaTyper.scala:50-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala#L50-L100) (assignType)
 
-[^11]: Rust: `ergoscript-compiler/src/type_infer.rs:25-49` (assign_type)
+[^11]: Rust: [`type_infer.rs:25-49`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/type_infer.rs#L25-L49) (assign_type)
 
-[^12]: Rust: `ergoscript-compiler/src/compiler.rs:23-55` (CompileError)
+[^12]: Rust: [`compiler.rs:23-55`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/compiler.rs#L23-L55) (CompileError)
 
-[^13]: Scala: `data/shared/src/main/scala/sigma/ast/SigmaPredef.scala` (PredefinedFuncRegistry)
+[^13]: Scala: [`SigmaPredef.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/SigmaPredef.scala) (PredefinedFuncRegistry)

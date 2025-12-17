@@ -8,21 +8,25 @@
 
 ## Prerequisites
 
-- Sigma protocols ([Chapter 11](../part4/ch11-sigma-protocols.md))
-- Evaluation model ([Chapter 12](./ch12-evaluation-model.md))
-- Verifier implementation ([Chapter 14](./ch14-verifier-implementation.md))
+- [Chapter 11](../part4/ch11-sigma-protocols.md) for Sigma protocol structure, simulation, and Fiat-Shamir
+- [Chapter 12](./ch12-evaluation-model.md) for ErgoTree reduction to SigmaBoolean
+- [Chapter 14](./ch14-verifier-implementation.md) for understanding what the verifier expects
 
 ## Learning Objectives
 
-- Understand the 10-step proving algorithm
-- Master the unproven tree data structure and transformations
-- Learn challenge flow through composite sigma structures
-- Implement the hint system for distributed signing
-- Trace proof serialization
+By the end of this chapter, you will be able to:
+
+- Trace the 10-step proving algorithm from SigmaBoolean to serialized proof
+- Work with the `UnprovenTree` data structure and its transformations
+- Explain challenge flow through AND, OR, and THRESHOLD compositions
+- Use the hint system for distributed multi-party signing
+- Serialize proofs in the compact format expected by verifiers
 
 ## Prover Overview
 
-The prover generates cryptographic proofs for sigma propositions[^1][^2]:
+The prover is the counterpart to the verifier: given an ErgoTree, a transaction context, and the necessary secret keys, it generates a cryptographic proof that the verifier will accept. The proving algorithm is significantly more complex than verification because it must handle composite propositions (AND/OR/THRESHOLD) by generating simulated transcripts for children the prover cannot prove, while maintaining the zero-knowledge property that simulated and real transcripts are indistinguishable.
+
+The prover generates cryptographic proofs for sigma propositions through a multi-phase algorithm[^1][^2]:
 
 ```
 Proving Pipeline
@@ -541,6 +545,12 @@ fn simulateLeaf(leaf: UnprovenLeaf) UncheckedTree {
 }
 
 /// Commit at a real leaf: pick random r, compute a = g^r
+///
+/// SECURITY: The randomness `r` MUST come from a cryptographically secure source:
+/// - Use a CSPRNG (e.g., OS-provided /dev/urandom, std.crypto.random)
+/// - For platforms without secure random, use deterministic nonce generation
+///   (RFC 6979 style: r = HMAC(secret_key, message))
+/// - NEVER reuse nonces: reusing r with different messages reveals the secret key
 fn commitLeaf(
     leaf: UnprovenLeaf,
     hints: *const HintsBag,
@@ -876,50 +886,54 @@ const ProverError = error{
 
 ## Summary
 
-The prover transforms a sigma-tree through multiple stages:
-1. **Mark real** (bottom-up): Identify what prover can prove
-2. **Polish simulated** (top-down): Ensure correct structure
-3. **Simulate and commit**: Generate commitments for all leaves
-4. **Fiat-Shamir**: Compute root challenge from commitments + message
-5. **Prove** (top-down): Compute challenges and responses for real nodes
-6. **Serialize**: Output compact proof format
+This chapter covered the prover implementation that generates Sigma proofs:
 
-Key principles:
-- Simulated transcripts are indistinguishable from real (zero-knowledge)
-- Challenge flow depends on composition type (AND/OR/THRESHOLD)
-- GF(2^192) polynomials enable efficient threshold challenge distribution
-- Hints enable distributed signing without sharing secrets
+The prover transforms a sigma-tree through a 10-step algorithm:
+1. **Convert to unproven**: Transform SigmaBoolean to UnprovenTree data structure
+2. **Mark real** (bottom-up): Identify which nodes the prover has secrets for
+3. **Check root**: Fail if the root is simulated (prover cannot prove)
+4. **Polish simulated** (top-down): Ensure OR keeps only one real child, THRESHOLD keeps exactly k
+5. **Simulate and commit**: Assign challenges to simulated children, generate commitments for real leaves
+6. **Fiat-Shamir serialization**: Serialize tree structure and commitments
+7. **Compute root challenge**: Hash serialized tree with message
+8. **Prove** (top-down): Distribute challenges and compute responses for real nodes
+9. **Serialize proof**: Output compact format
+
+Key design principles:
+- **Zero-knowledge**: Simulated transcripts are computationally indistinguishable from real ones
+- **Challenge flow** depends on composition: AND propagates same challenge to all; OR uses XOR constraint; THRESHOLD uses polynomial interpolation over GF(2^192)
+- **Hint system** enables distributed signing: parties exchange commitments (never secret randomness), then sign sequentially
 
 ---
 
 *Next: [Chapter 16: ErgoScript Parser](../part6/ch16-ergoscript-parser.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala:1-100`
+[^1]: Scala: [`ProverInterpreter.scala:1-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala#L1-L100)
 
-[^2]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs:1-100`
+[^2]: Rust: [`prover.rs:1-100`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs#L1-L100)
 
-[^3]: Rust: `ergotree-interpreter/src/sigma_protocol/unproven_tree.rs` (NodePosition)
+[^3]: Rust: [`unproven_tree.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/unproven_tree.rs) (NodePosition)
 
-[^4]: Scala: `interpreter/shared/src/main/scala/sigmastate/UnprovenTree.scala`
+[^4]: Scala: [`UnprovenTree.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/UnprovenTree.scala)
 
-[^5]: Rust: `ergotree-interpreter/src/sigma_protocol/unproven_tree.rs:27-88`
+[^5]: Rust: [`unproven_tree.rs:27-88`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/unproven_tree.rs#L27-L88)
 
-[^6]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs` (convert_to_unproven)
+[^6]: Rust: [`prover.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs) (convert_to_unproven)
 
-[^7]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala` (markReal)
+[^7]: Scala: [`ProverInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala) (markReal)
 
-[^8]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs:243-305`
+[^8]: Rust: [`prover.rs:243-305`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs#L243-L305)
 
-[^9]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs:367-400`
+[^9]: Rust: [`prover.rs:367-400`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs#L367-L400)
 
-[^10]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala` (simulateAndCommit)
+[^10]: Scala: [`ProverInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala) (simulateAndCommit)
 
-[^11]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs` (simulate_and_commit)
+[^11]: Rust: [`prover.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs) (simulate_and_commit)
 
-[^12]: Rust: `ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs`
+[^12]: Rust: [`fiat_shamir.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs)
 
-[^13]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala` (proving)
+[^13]: Scala: [`ProverInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala) (proving)
 
-[^14]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs` (proving)
+[^14]: Rust: [`prover.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs) (proving)
 
-[^15]: Rust: `ergotree-interpreter/src/sigma_protocol/prover/hint.rs`
+[^15]: Rust: [`hint.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover/hint.rs)

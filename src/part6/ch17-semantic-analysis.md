@@ -8,17 +8,19 @@
 
 ## Prerequisites
 
-- Parser ([Chapter 16](./ch16-ergoscript-parser.md))
-- Type system ([Chapter 2](../part1/ch02-type-system.md))
-- Basic understanding of type inference
+- [Chapter 16](./ch16-ergoscript-parser.md) for the untyped AST structure
+- [Chapter 2](../part1/ch02-type-system.md) for type codes and type compatibility rules
+- Familiarity with type inference concepts: type variables, unification, constraint solving
 
 ## Learning Objectives
 
-- Understand two-phase semantic analysis: binding then typing
-- Master name resolution algorithm
-- Learn type unification algorithm
-- Understand method resolution and lowering
-- Trace type inference for complex expressions
+By the end of this chapter, you will be able to:
+
+- Explain the two-phase semantic analysis: name binding followed by type inference
+- Implement name resolution for globals, environment variables, and local definitions
+- Apply the type unification algorithm to infer types and detect mismatches
+- Describe method resolution and how method calls are lowered to direct operations
+- Trace type inference for complex expressions involving generics and collections
 
 ## Semantic Analysis Overview
 
@@ -876,22 +878,22 @@ Key algorithms:
 
 *Next: [Chapter 18: Intermediate Representation](./ch18-intermediate-representation.md)*
 
-[^1]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaBinder.scala`
+[^1]: Scala: [`SigmaBinder.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaBinder.scala)
 
-[^2]: Rust: `ergoscript-compiler/src/binder.rs`
+[^2]: Rust: [`binder.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/binder.rs)
 
-[^3]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaBinder.scala:30-100`
+[^3]: Scala: [`SigmaBinder.scala:30-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaBinder.scala#L30-L100)
 
-[^4]: Rust: `ergoscript-compiler/src/binder.rs:26-61`
+[^4]: Rust: [`binder.rs:26-61`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/binder.rs#L26-L61)
 
-[^5]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala`
+[^5]: Scala: [`SigmaTyper.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala)
 
-[^6]: Rust: `ergoscript-compiler/src/type_infer.rs`
+[^6]: Rust: [`type_infer.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/type_infer.rs)
 
-[^7]: Scala: `core/shared/src/main/scala/sigma/ast/package.scala` (unifyTypes)
+[^7]: Scala: [`package.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/package.scala) (unifyTypes)
 
-[^8]: Scala: `data/shared/src/main/scala/sigma/reflection/SRMethod.scala`
+[^8]: Scala: [`SRMethod.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/reflection/SRMethod.scala)
 
-[^9]: Scala: `sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala:200-280`
+[^9]: Scala: [`SigmaTyper.scala:200-280`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sc/shared/src/main/scala/sigma/compiler/phases/SigmaTyper.scala#L200-L280)
 
-[^10]: Rust: `ergoscript-compiler/src/mir/lower.rs:29-76`
+[^10]: Rust: [`lower.rs:29-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/mir/lower.rs#L29-L76)

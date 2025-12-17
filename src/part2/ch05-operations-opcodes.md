@@ -8,15 +8,18 @@
 
 ## Prerequisites
 
-- Bytecode encoding concepts
-- Prior chapters: [Chapter 4](./ch04-value-nodes.md), [Chapter 2](../part1/ch02-type-system.md)
+- Understanding of bytecode as numeric instruction encodings
+- Single-byte vs multi-byte encoding trade-offs
+- Prior chapters: [Chapter 4](./ch04-value-nodes.md) for value node types, [Chapter 2](../part1/ch02-type-system.md) for type codes that occupy the lower opcode range
 
 ## Learning Objectives
 
-- Understand opcode encoding scheme
-- Navigate the complete opcode space (0x00-0xFF)
-- Identify operations by category
-- Understand cost descriptors for operations
+By the end of this chapter, you will be able to:
+
+- Explain the opcode encoding scheme and why constants share space with operations
+- Navigate the complete opcode space (0x00-0xFF) and identify operation categories
+- Describe the three cost descriptor types (`FixedCost`, `PerItemCost`, `TypeBasedCost`)
+- Understand how short-circuit evaluation affects cost calculation
 
 ## Opcode Encoding Scheme
 
@@ -35,7 +38,7 @@ Opcode Space Layout:
 └────────────┴───────────────────────────────────────────┘
 ```
 
-Constant values 0x01-0x70 are encoded by type code directly, saving one byte.
+This layout is an optimization: constant values in the range 0x01-0x70 encode their type code directly as the opcode, saving one byte per constant in the serialized tree. The type code simultaneously identifies both *what* the value is and *how* to deserialize it. Operations occupy the upper range (0x72-0xFF), providing 143 distinct operation codes.
 
 ```zig
 const OpCode = struct {
@@ -361,7 +364,7 @@ const BinaryAnd = struct {
 
 ## Cost Descriptors
 
-Three cost descriptor types[^7]:
+Every operation has an associated cost that the interpreter accumulates during evaluation. If the total cost exceeds the block limit, execution fails—this prevents denial-of-service attacks via expensive computations. Three cost descriptor types model different operation characteristics[^7]:
 
 ```zig
 /// Fixed cost regardless of input
@@ -528,32 +531,34 @@ const CalcSha256 = struct {
 
 ## Summary
 
-- Opcodes are single bytes: 0x01-0x70 for constants, 0x71-0xFF for operations
-- Operations organized into categories: variables, conversions, relations, arithmetic, context, collections, box access, crypto, blocks, options, sigma props, bitwise
-- Cost descriptors: `FixedCost`, `PerItemCost`, `TypeBasedCost`
-- Arithmetic operations have type-based costs (BigInt more expensive)
-- Logical operations implement short-circuit evaluation with accurate cost tracking
+This chapter detailed the opcode encoding scheme that gives each ErgoTree operation a unique byte identifier:
+
+- **Opcode space** is split between constant type codes (0x01-0x70) and operation codes (0x72-0xFF), with constants using their type code directly to save one byte per value
+- **Operation categories** group related functionality: variables, conversions, relations, arithmetic, context access, collections, box properties, cryptography, blocks, options, sigma propositions, and bitwise operations
+- **Cost descriptors** come in three types: `FixedCost` for constant-time operations, `PerItemCost` for operations that scale with input size, and `TypeBasedCost` for operations where BigInt is more expensive than primitive types
+- **Short-circuit evaluation** in logical operations (`AND`, `OR`, `BinaryAnd`, `BinaryOr`) stops early when the result is determined, with costs calculated based on actual items processed
+- **Context operations** provide access to transaction data: `HEIGHT`, `INPUTS`, `OUTPUTS`, `SELF` box, and miner public key
 
 ---
 
 *Next: [Chapter 6: Methods on Types](./ch06-methods-on-types.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/OpCodes.scala`
+[^1]: Scala: [`OpCodes.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/OpCodes.scala)
 
-[^2]: Rust: `ergotree-ir/src/serialization/op_code.rs:10-100`
+[^2]: Rust: [`op_code.rs:10-100`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/op_code.rs#L10-L100)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala:704-827`
+[^3]: Scala: [`trees.scala:704-827`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala#L704-L827)
 
-[^4]: Rust: `ergotree-ir/src/serialization/bin_op.rs`
+[^4]: Rust: [`bin_op.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/bin_op.rs)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala:908-1100`
+[^5]: Scala: [`trees.scala:908-1100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala#L908-L1100)
 
-[^6]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (AND, OR)
+[^6]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (AND, OR)
 
-[^7]: Scala: `core/shared/src/main/scala/sigma/ast/CostKind.scala`
+[^7]: Scala: [`CostKind.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/CostKind.scala)
 
-[^8]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (context operations)
+[^8]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (context operations)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (box accessors)
+[^9]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (box accessors)
 
-[^10]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (crypto operations)
+[^10]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (crypto operations)

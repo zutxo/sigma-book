@@ -8,24 +8,32 @@
 
 ## Prerequisites
 
-- Basic blockchain and UTXO model knowledge
-- Familiarity with any systems programming language
-- Public key cryptography fundamentals (public keys, signatures)
+- Basic blockchain concepts (transactions, blocks, consensus)
+- Understanding of the UTXO model (unspent transaction outputs)
+- Familiarity with any systems programming language (C, Rust, Go, or similar)
+- Public key cryptography fundamentals (key pairs, digital signatures, hash functions)
 
 ## Learning Objectives
 
-- Understand ErgoScript, ErgoTree, and SigmaBoolean relationships
-- Describe the UTXO model and script-guarded spending
-- Explain the prover/verifier separation
-- Identify SigmaState interpreter components
+By the end of this chapter, you will be able to:
+
+- Explain why Sigma protocols offer advantages over traditional blockchain scripting
+- Describe the relationship between ErgoScript, ErgoTree, and SigmaBoolean
+- Understand the UTXO model and how scripts guard spending conditions
+- Differentiate the roles of prover and verifier in transaction validation
+- Identify the core components of the Sigma interpreter architecture
 
 ## What is Sigma?
 
-**Sigma** (Σ) refers to **Σ-protocols**—cryptographic protocols enabling zero-knowledge proofs of secret knowledge[^1]. The name reflects their three-move structure:
+Traditional blockchain scripting languages like Bitcoin Script offer limited expressiveness: they support hash preimages, signature checks, and timelocks, but little else. Ethereum's EVM provides Turing completeness but at the cost of complexity, high gas fees, and limited privacy guarantees.
 
-1. **Commitment**: Prover sends a commitment
-2. **Challenge**: Verifier sends a random challenge
-3. **Response**: Prover sends a response proving knowledge
+**Sigma** (Σ) protocols occupy a middle ground. They are cryptographic proof systems that enable zero-knowledge proofs of knowledge—proving you know a secret without revealing it[^1]. The name comes from the Greek letter Σ and reflects their characteristic three-move structure:
+
+1. **Commitment**: The prover sends a randomized commitment value
+2. **Challenge**: The verifier sends a random challenge
+3. **Response**: The prover sends a response that proves knowledge without revealing secrets
+
+What makes Sigma protocols powerful for blockchains is their **composability**: you can combine them with AND, OR, and threshold operations to build complex spending conditions while preserving zero-knowledge properties.
 
 ## The Three Layers
 
@@ -150,29 +158,32 @@ const ProveDhTuple = struct {
 
 ## The UTXO Model
 
-Ergo uses the UTXO model where **boxes** are the fundamental units:
+Ergo extends the UTXO (Unspent Transaction Output) model pioneered by Bitcoin. Instead of simple locking scripts, Ergo uses **boxes**—rich data structures that contain value, tokens, and arbitrary typed data:
 
 ```
 ┌─────────────────────────────────────────┐
 │                  Box                    │
 ├─────────────────────────────────────────┤
-│  value: i64 (nanoERGs)                  │
-│  ergoTree: ErgoTree                     │
-│  tokens: []Token ──────────┐            │
-│  registers: [10]?Constant  │            │
-│  creationInfo: (height,    │            │
-│                 txId, idx) │            │
-└────────────────────────────┼────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                             ▼
+│  R0: value (i64 nanoERGs)               │  ← Computed registers
+│  R1: ergoTree (spending condition)      │
+│  R2: tokens (asset list)                │
+│  R3: creationInfo (height, txId, idx)   │
+├─────────────────────────────────────────┤
+│  R4-R9: additional registers ───────────┼──► User-defined data
+│         (optional, typed constants)     │     (up to 6 registers)
+└─────────────────────────────────────────┘
+                    │
+     ┌──────────────┴──────────────┐
+     ▼                             ▼
 ┌─────────────────────────┐   ┌─────────────────────────┐
 │         Token           │   │   Register (R4-R9)      │
 ├─────────────────────────┤   ├─────────────────────────┤
-│  id: [32]u8             │   │  value: Constant        │
-│  amount: i64            │   │                         │
+│  id: [32]u8 (token ID)  │   │  value: Constant        │
+│  amount: i64            │   │  (any SType value)      │
 └─────────────────────────┘   └─────────────────────────┘
 ```
+
+Registers R0–R3 are computed from box fields and always present. Registers R4–R9 are optional and can store any typed value—integers, byte arrays, group elements, or even nested collections.
 
 ```zig
 const Box = struct {
@@ -270,19 +281,18 @@ const Verifier = struct {
 
 ## Why Sigma Protocols?
 
-Traditional scripts support only:
-- Hash preimage revelation
-- Signature verification
-- Time locks
+Consider what Bitcoin Script can express: "This output can be spent if you provide a valid signature for public key X." This covers most payment scenarios but falls short for more sophisticated applications.
 
-Sigma protocols enable:
+Sigma protocols enable a fundamentally richer set of spending conditions:
 
-| Feature | Description |
-|---------|-------------|
-| **Composable ZK Proofs** | AND, OR, threshold combinations |
-| **Ring Signatures** | Prove set membership without revealing which |
-| **Threshold Signatures** | k-of-n schemes |
-| **Privacy** | Prove statements without full revelation |
+| Feature | What It Enables | Example Use Case |
+|---------|-----------------|------------------|
+| **Composable ZK Proofs** | AND, OR, threshold combinations of conditions | Multi-party escrow with complex release logic |
+| **Ring Signatures** | Prove you're one of N signers without revealing which | Anonymous voting, whistleblower systems |
+| **Threshold Signatures** | Require k-of-n parties to sign | DAO governance, cold storage recovery |
+| **Zero-Knowledge Privacy** | Prove statements without revealing underlying data | Private auctions, confidential identity verification |
+
+The key insight is that Sigma protocols can be **composed** while preserving their zero-knowledge properties. An OR composition of two Sigma proofs reveals that the prover knows one of two secrets—but not which one.
 
 ```zig
 // OR composition hides actual signer
@@ -311,28 +321,40 @@ const ring_signature = SigmaBoolean{
 
 ## Key Design Principles
 
+The Sigma interpreter is built around four core principles that make it suitable for blockchain consensus:
+
 ### Determinism
-All operations produce identical results for identical inputs—essential for consensus.
+Every operation must produce identical results for identical inputs, regardless of platform or implementation. This means no floating-point arithmetic, no uninitialized memory, and careful handling of hash map iteration order. Without determinism, nodes would disagree on transaction validity.
 
 ### Bounded Execution
-Every script completes within a cost limit, tracking:
-- Computational operations
-- Memory allocations
-- Cryptographic operations
+Every script must complete within a predictable cost limit. The interpreter tracks three resource categories:
+- **Computational operations**: arithmetic, comparisons, function calls
+- **Memory allocations**: collections, tuples, intermediate values
+- **Cryptographic operations**: EC point multiplication, signature verification
+
+Scripts exceeding the cost limit fail validation, preventing denial-of-service attacks.
 
 ### Soft-Fork Compatibility
-ErgoTree includes version information; unknown opcodes are handled gracefully.
+ErgoTree includes version information in its header. When nodes encounter unknown opcodes (from future protocol versions), they can handle them gracefully rather than rejecting the entire block. This enables protocol upgrades without hard forks.
 
-### Cross-Platform
-Targets JVM (Scala), JavaScript (Scala.js), and Rust (sigma-rust)[^7].
+### Cross-Platform Consistency
+The specification must be implementable identically across different platforms. Reference implementations exist for:
+- **JVM** (Scala): The original sigmastate-interpreter
+- **JavaScript** (Scala.js): Browser and Node.js environments
+- **Native** (Rust): sigma-rust for performance-critical applications[^7]
 
 ## Summary
 
-- **ErgoScript** compiles to **ErgoTree** bytecode
-- **ErgoTree** evaluates to **SigmaBoolean** propositions
-- **Prover** generates proofs; **Verifier** checks them
-- **Sigma protocols** enable composable zero-knowledge proofs
-- Design ensures **determinism**, **bounded execution**, **soft-fork compatibility**
+This chapter introduced the fundamental concepts of the Sigma protocol ecosystem:
+
+- **Sigma protocols** are three-move cryptographic proofs that enable zero-knowledge proofs of knowledge, with the crucial property of composability
+- **ErgoScript** is a high-level, statically-typed language that compiles to **ErgoTree** bytecode
+- **ErgoTree** is a serialized AST stored in UTXO boxes that evaluates to **SigmaBoolean** propositions
+- **SigmaBoolean** represents cryptographic conditions (discrete log proofs, Diffie-Hellman tuples) combined with AND, OR, and threshold logic
+- The **prover** generates zero-knowledge proofs; the **verifier** checks them without learning secrets
+- The system is designed for blockchain consensus: **deterministic**, **bounded**, **soft-fork compatible**, and **cross-platform**
+
+In the following chapters, we'll dive deep into each layer—starting with the type system that makes ErgoTree's static guarantees possible.
 
 ---
 
@@ -340,14 +362,14 @@ Targets JVM (Scala), JavaScript (Scala.js), and Rust (sigma-rust)[^7].
 
 [^1]: Sigma protocols are interactive proof systems with the special "honest-verifier zero-knowledge" property.
 
-[^2]: Scala: `docs/LangSpec.md:57-80`
+[^2]: Scala: [`LangSpec.md:57-80`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/LangSpec.md#L57-L80)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:24-88`
+[^3]: Scala: [`ErgoTree.scala:24-88`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L24-L88)
 
-[^4]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:10-32`
+[^4]: Rust: [`tree_header.rs:10-32`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree/tree_header.rs#L10-L32)
 
-[^5]: Scala: `core/shared/src/main/scala/sigma/data/SigmaBoolean.scala:12-21`
+[^5]: Scala: [`SigmaBoolean.scala:12-21`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/SigmaBoolean.scala#L12-L21)
 
-[^6]: Rust: `ergotree-ir/src/sigma_protocol/sigma_boolean.rs:34-80`
+[^6]: Rust: [`sigma_boolean.rs:34-80`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/sigma_boolean.rs#L34-L80)
 
-[^7]: Rust implementation: `sigma-rust` crate at `ergotree-ir/`, `ergotree-interpreter/`
+[^7]: Rust implementation: [sigma-rust](https://github.com/ergoplatform/sigma-rust) crate at `ergotree-ir/`, `ergotree-interpreter/`

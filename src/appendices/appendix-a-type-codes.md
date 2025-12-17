@@ -33,6 +33,8 @@ Range          Usage
 
 ## Primitive Types (Embeddable)
 
+**Embeddable types** can be used as element types in collections (`Coll[T]`, `Option[T]`) and have compact type code encodings. They are "embedded" into composite type codes rather than being serialized separately. For example, `Coll[Int]` is encoded as `0x0C 0x04` where `0x04` (Int) is embedded directly after `0x0C` (Coll).
+
 | Dec | Hex  | Type            | Size     | Zig Type             |
 |-----|------|-----------------|----------|----------------------|
 | 1   | 0x01 | SBoolean        | 1 bit    | `bool`               |
@@ -229,6 +231,6 @@ const TypeConstants = struct {
 
 *[Previous: Chapter 31](../part10/ch31-performance-engineering.md) | [Next: Appendix B](./appendix-b-opcodes.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala`
+[^1]: Scala: [`SType.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala)
 
-[^2]: Rust: `ergotree-ir/src/types/stype.rs:28-76`
+[^2]: Rust: [`stype.rs:28-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/stype.rs#L28-L76)

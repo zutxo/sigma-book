@@ -8,25 +8,35 @@
 
 ## Prerequisites
 
-- Binary representation concepts (bits, bytes, VLQ encoding)
-- Basic AST understanding
-- Prior chapters: [Chapter 1](./ch01-introduction.md), [Chapter 2](./ch02-type-system.md)
+- Binary representation concepts (bits, bytes, bitwise operations)
+- Variable-Length Quantity (VLQ) encoding—a method for encoding integers using a variable number of bytes
+- Understanding of Abstract Syntax Trees (ASTs) as hierarchical representations of code structure
+- Prior chapters: [Chapter 1](./ch01-introduction.md) for the three-layer architecture, [Chapter 2](./ch02-type-system.md) for type codes used in serialization
 
 ## Learning Objectives
 
-- Parse and interpret ErgoTree header bytes
-- Understand constant segregation benefits
-- Explain version mechanism and soft-fork support
-- Describe complete ErgoTree binary format
+By the end of this chapter, you will be able to:
+
+- Parse and interpret ErgoTree header bytes, extracting version and feature flags
+- Explain how constant segregation enables template sharing and caching optimizations
+- Describe the version mechanism and how it enables soft-fork protocol upgrades
+- Read and write the complete ErgoTree binary format
 
 ## ErgoTree Overview
 
-**ErgoTree** is the serialized, self-sufficient contract representation[^1][^2]:
+When you write an ErgoScript contract, the compiler transforms it into **ErgoTree**—a compact binary format designed for blockchain storage and deterministic execution. Every UTXO box contains an ErgoTree that defines its spending conditions.
 
-- Header byte defining format and version
-- Optional constants array (if segregation enabled)
-- Root expression of type `SigmaProp`
-- Optional size field (for v1+)
+ErgoTree is specifically designed to be[^1][^2]:
+- **Self-sufficient**: Contains everything needed for evaluation (no external dependencies)
+- **Compact**: Optimized binary encoding minimizes on-chain storage
+- **Forward-compatible**: Version mechanism enables protocol upgrades without hard forks
+- **Deterministic**: Same bytes always produce the same evaluation result
+
+The structure consists of:
+- **Header byte** — Format version and feature flags
+- **Size field** (optional) — Total size for fast skipping
+- **Constants array** (optional) — Extracted constants for template sharing
+- **Root expression** — The actual script logic, returning `SigmaProp`
 
 ```zig
 const ErgoTree = struct {
@@ -186,7 +196,7 @@ const ErgoTreeSerializer = struct {
 
 ## Constant Segregation
 
-Extracts constants from expression tree for optimization[^5]:
+Constant segregation is an optimization technique that extracts literal values from the expression tree and stores them in a separate array[^5]. The expression tree then references these constants via placeholder indices. This seemingly simple change enables several powerful optimizations:
 
 ```
 Without segregation:
@@ -234,14 +244,16 @@ pub fn substConstants(
 
 ## Version Mechanism
 
-Supports soft-fork compatibility[^6]:
+The ErgoTree version field (bits 0-2) enables soft-fork protocol upgrades without breaking consensus[^6]. Each ErgoTree version corresponds to a minimum required block version in the Ergo protocol—nodes running older protocol versions will skip validation of scripts with newer ErgoTree versions rather than rejecting them as invalid.
 
-| Version | Block Version | Features |
-|---------|---------------|----------|
-| v0 | 1 | Original format, AOT costing |
-| v1 | 2 | JIT costing, size required |
-| v2 | 3 | Extended operations |
-| v3 | 4 | UnsignedBigInt, enhanced methods |
+| ErgoTree Version | Min Block Version | Key Features |
+|------------------|-------------------|--------------|
+| v0 | 1 | Original format with Ahead-of-Time (AOT) costing calculated during compilation |
+| v1 | 2 | Just-in-Time (JIT) costing calculated during execution; size field required |
+| v2 | 3 | Extended operations and new opcodes |
+| v3 | 4 | `UnsignedBigInt` type and enhanced collection methods |
+
+The size field became mandatory in v1 to support forward compatibility—nodes can skip over scripts they cannot fully parse by reading the size and advancing past the unknown content.
 
 ```zig
 pub fn setVersionBits(header: HeaderType, version: u3) HeaderType {
@@ -257,7 +269,7 @@ pub fn setVersionBits(header: HeaderType, version: u3) HeaderType {
 
 ## Unparsed Trees
 
-When deserialization fails (unknown opcode), raw bytes are stored[^7]:
+When a node encounters an ErgoTree with an unknown opcode—typically from a newer protocol version—deserialization fails. Rather than rejecting the transaction entirely, the raw bytes are preserved as an "unparsed tree"[^7]. This design is critical for soft-fork compatibility: older nodes can process blocks containing newer script versions without understanding their contents.
 
 ```zig
 const UnparsedTree = struct {
@@ -278,8 +290,6 @@ pub fn toProposition(self: *const ErgoTree, replace_constants: bool) !SigmaPropV
     };
 }
 ```
-
-This enables nodes to handle future versions gracefully.
 
 ## Creating ErgoTrees
 
@@ -366,27 +376,30 @@ const ErgoTree = struct {
 
 ## Summary
 
-- ErgoTree is self-sufficient serialized contract format
-- **Header byte** encodes version (3 bits), size flag, segregation flag
-- **Constant segregation** extracts constants for template sharing
-- Version > 0 **requires** size flag for forward compatibility
-- **UnparsedTree** handles soft-fork scenarios gracefully
-- Trees convert to **SigmaBoolean** for simple cryptographic propositions
+This chapter covered the complete ErgoTree binary format—the serialized representation of smart contracts stored in every UTXO box:
+
+- **ErgoTree** is a self-sufficient serialized contract format containing everything needed for evaluation without external dependencies
+- The **header byte** uses a bit-field layout: version (bits 0-2), size flag (bit 3), constant segregation flag (bit 4), with reserved bits for future extensions
+- **Constant segregation** (bit 4) extracts literal values into a separate array, enabling template sharing, caching, and runtime substitution without re-parsing
+- The **version mechanism** enables soft-fork protocol upgrades—newer ErgoTree versions are skipped by older nodes rather than causing consensus failures
+- ErgoTree versions 1+ **require** the size flag, allowing nodes to skip past unknown content
+- **UnparsedTree** preserves raw bytes when deserialization fails, maintaining block validity even with unknown opcodes
+- Simple cryptographic propositions can be extracted as **SigmaBoolean** values for direct signature verification
 
 ---
 
 *Next: [Chapter 4: Value Nodes](../part2/ch04-value-nodes.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:24-80`
+[^1]: Scala: [`ErgoTree.scala:24-80`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L24-L80)
 
-[^2]: Rust: `ergotree-ir/src/ergo_tree.rs:33-41`
+[^2]: Rust: [`ergo_tree.rs:33-41`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree.rs#L33-L41)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:227-270`
+[^3]: Scala: [`ErgoTree.scala:227-270`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L227-L270)
 
-[^4]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:10-32`
+[^4]: Rust: [`tree_header.rs:10-32`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree/tree_header.rs#L10-L32)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:307-322`
+[^5]: Scala: [`ErgoTree.scala:307-322`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L307-L322)
 
-[^6]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:263-305`
+[^6]: Scala: [`ErgoTree.scala:263-305`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L263-L305)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/ast/ErgoTree.scala:19-22`
+[^7]: Scala: [`ErgoTree.scala:19-22`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/ErgoTree.scala#L19-L22)

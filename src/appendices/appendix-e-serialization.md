@@ -424,16 +424,16 @@ const SigmaByteReader = struct {
 
 *[Previous: Appendix D](./appendix-d-methods.md) | [Next: Appendix F](./appendix-f-version-history.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/`
+[^1]: Scala: [`serialization/`](https://github.com/ScorexFoundation/sigmastate-interpreter/tree/develop/data/shared/src/main/scala/sigma/serialization)
 
-[^2]: Rust: `ergotree-ir/src/serialization/sigma_byte_reader.rs:12-97`
+[^2]: Rust: [`sigma_byte_reader.rs:12-97`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/sigma_byte_reader.rs#L12-L97)
 
-[^3]: Rust: `ergotree-ir/src/serialization/types.rs`
+[^3]: Rust: [`types.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/types.rs)
 
-[^4]: Rust: `ergotree-ir/src/ergo_tree.rs` (header parsing)
+[^4]: Rust: [`ergo_tree.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree.rs) (header parsing)
 
-[^5]: Rust: `ergotree-ir/src/serialization/data.rs`
+[^5]: Rust: [`data.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/data.rs)
 
-[^6]: Rust: `ergotree-ir/src/serialization/expr.rs`
+[^6]: Rust: [`expr.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/expr.rs)
 
-[^7]: Scala: `docs/spec/serialization.tex` (size limits)
+[^7]: Scala: [`serialization.tex`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/spec/serialization.tex) (size limits)

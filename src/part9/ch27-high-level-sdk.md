@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Transaction validation ([Chapter 24](../part8/ch24-transaction-validation.md))
-- Prover implementation ([Chapter 15](../part5/ch15-prover-implementation.md))
-- Wallet signing ([Chapter 26](../part8/ch26-wallet-signing.md))
+- [Chapter 24](../part8/ch24-transaction-validation.md) for transaction structure and validation
+- [Chapter 15](../part5/ch15-prover-implementation.md) for proof generation
+- [Chapter 26](../part8/ch26-wallet-signing.md) for wallet integration
 
 ## Learning Objectives
 
-- Understand SDK architecture for transaction building
-- Implement TxBuilder with builder pattern
-- Master the reduce-then-sign pipeline
-- Work with TransactionContext and BoxSelection
+By the end of this chapter, you will be able to:
+
+- Explain the SDK architecture layers from cryptography to transaction building
+- Use `TxBuilder` with the builder pattern for ergonomic transaction construction
+- Trace the reduce-then-sign pipeline for transaction signing
+- Work with `TransactionContext` and `BoxSelection` for complex transaction scenarios
 
 ## SDK Architecture
 
@@ -795,38 +797,38 @@ pub fn buildAndSignTransaction(
 
 *Next: [Chapter 28: Key Derivation](./ch28-key-derivation.md)*
 
-[^1]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/`
+[^1]: Scala: [`sdk/`](https://github.com/ScorexFoundation/sigmastate-interpreter/tree/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk)
 
-[^2]: Rust: `ergo-lib/src/wallet.rs:52-244`
+[^2]: Rust: [`wallet.rs:52-244`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L52-L244)
 
-[^3]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala`
+[^3]: Scala: [`UnsignedTransactionBuilder.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala)
 
-[^4]: Rust: `ergo-lib/src/wallet/tx_builder.rs:41-78`
+[^4]: Rust: [`tx_builder.rs:41-78`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/tx_builder.rs#L41-L78)
 
-[^5]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala:79-111`
+[^5]: Scala: [`UnsignedTransactionBuilder.scala:79-111`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/UnsignedTransactionBuilder.scala#L79-L111)
 
-[^6]: Rust: `ergo-lib/src/wallet/tx_builder.rs:144-258`
+[^6]: Rust: [`tx_builder.rs:144-258`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/tx_builder.rs#L144-L258)
 
-[^7]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala` (token validation)
+[^7]: Scala: [`AppkitProvingInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala) (token validation)
 
-[^8]: Rust: `ergo-lib/src/wallet/tx_builder.rs:214-243`
+[^8]: Rust: [`tx_builder.rs:214-243`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/tx_builder.rs#L214-L243)
 
-[^9]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/Transactions.scala:17-46`
+[^9]: Scala: [`Transactions.scala:17-46`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/Transactions.scala#L17-L46)
 
-[^10]: Rust: `ergo-lib/src/wallet/tx_context.rs`
+[^10]: Rust: [`tx_context.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/tx_context.rs)
 
-[^11]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/BoxSelectionResult.scala`
+[^11]: Scala: [`BoxSelectionResult.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/BoxSelectionResult.scala)
 
-[^12]: Rust: `ergo-lib/src/wallet/box_selector.rs`
+[^12]: Rust: [`box_selector.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/box_selector.rs)
 
-[^13]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:274-289`
+[^13]: Scala: [`AppkitProvingInterpreter.scala:274-289`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala#L274-L289)
 
-[^14]: Rust: `ergo-lib/src/chain/transaction/reduced.rs:25-67`
+[^14]: Rust: [`reduced.rs:25-67`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/reduced.rs#L25-L67)
 
-[^15]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:81-95`
+[^15]: Scala: [`AppkitProvingInterpreter.scala:81-95`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala#L81-L95)
 
-[^16]: Rust: `ergo-lib/src/wallet/signing.rs:143-168`
+[^16]: Rust: [`signing.rs:143-168`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/signing.rs#L143-L168)
 
-[^17]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala:292-336`
+[^17]: Scala: [`AppkitProvingInterpreter.scala:292-336`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/AppkitProvingInterpreter.scala#L292-L336)
 
-[^18]: Rust: `ergo-lib/src/chain/transaction/reduced.rs:108-154`
+[^18]: Rust: [`reduced.rs:108-154`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/reduced.rs#L108-L154)

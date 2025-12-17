@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Interpreter architecture ([Chapter 14](../part5/ch14-sigma-interpreter-architecture.md))
-- Box model ([Chapter 22](../part7/ch22-box-model.md))
-- Interpreter wrappers ([Chapter 23](./ch23-interpreter-wrappers.md))
+- [Chapter 14](../part5/ch14-verifier-implementation.md) for script verification
+- [Chapter 22](../part7/ch22-box-model.md) for box structure and tokens
+- [Chapter 23](./ch23-interpreter-wrappers.md) for interpreter wrappers
 
 ## Learning Objectives
 
-- Understand the two-phase validation pipeline
-- Master stateless validation rules
-- Learn stateful validation with cost accumulation
-- Implement asset preservation checks
+By the end of this chapter, you will be able to:
+
+- Explain the two-phase validation pipeline (stateless then stateful)
+- Implement stateless validation rules (input/output counts, no duplicates)
+- Perform stateful validation with cost accumulation
+- Verify ERG and token preservation across transaction inputs and outputs
 
 ## Validation Pipeline
 
@@ -225,7 +227,7 @@ pub fn validateStateful(
         try verifyOutput(out, state_context, max_input_height);
     }
 
-    // 3. Check ERG preservation
+    // 3. Check ERG preservation (inputs must equal outputs exactly)
     const input_sum = try sumValues(boxes_to_spend);
     const output_sum = try sumValues(tx.outputs.items());
     if (input_sum != output_sum) {
@@ -603,7 +605,7 @@ ID    Name                    Phase       Description
 121   bsBlockTransactionsCost Stateful    cost in limit
 122   txDust                  Stateful    min value
 123   txFuture                Stateful    valid height
-124   txErgPreservation       Stateful    ERG balanced
+124   txErgPreservation       Stateful    inputs == outputs
 125   txAssetsPreservation    Stateful    tokens balanced
 126   txBoxSize               Stateful    ≤4KB
 127   txReemission            Stateful    EIP-27 rules
@@ -661,44 +663,44 @@ pub fn validateTransaction(
 - **Stateful**: Cost tracking, output checks, preservation rules, script verification
 - **Cost accumulation**: Tracks across inputs, bounded by maxBlockCost
 - **Storage rent**: Expired boxes (~4 years) spendable by anyone with recreation
-- **Asset preservation**: ERG exactly preserved, tokens can only decrease (or mint new)
+- **Asset preservation**: ERG exactly preserved (inputs == outputs), tokens can only decrease (or mint new)
 
 ---
 
 *Next: [Chapter 25: Cost Limits and Parameters](./ch25-cost-limits-parameters.md)*
 
-[^1]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:57-64`
+[^1]: Scala: [`ErgoTransaction.scala:57-64`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L57-L64)
 
-[^2]: Rust: `ergo-lib/src/chain/transaction.rs:60-96`
+[^2]: Rust: [`transaction.rs:60-96`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction.rs#L60-L96)
 
-[^3]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:91-115`
+[^3]: Scala: [`ErgoTransaction.scala:91-115`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L91-L115)
 
-[^4]: Rust: `ergo-lib/src/chain/transaction/ergo_transaction.rs:93-110`
+[^4]: Rust: [`ergo_transaction.rs:93-110`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/ergo_transaction.rs#L93-L110)
 
-[^5]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:360-441`
+[^5]: Scala: [`ErgoTransaction.scala:360-441`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L360-L441)
 
-[^6]: Rust: `ergo-lib/src/chain/transaction.rs:200-300`
+[^6]: Rust: [`transaction.rs:200-300`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction.rs#L200-L300)
 
-[^7]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:370-374`
+[^7]: Scala: [`ErgoTransaction.scala:370-374`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L370-L374)
 
-[^8]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala:93-96`
+[^8]: Scala: [`ErgoInterpreter.scala:93-96`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala#L93-L96)
 
-[^9]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:163-177`
+[^9]: Scala: [`ErgoTransaction.scala:163-177`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L163-L177)
 
-[^10]: Rust: `ergo-lib/src/chain/transaction/ergo_transaction.rs:49-67`
+[^10]: Rust: [`ergo_transaction.rs:49-67`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/ergo_transaction.rs#L49-L67)
 
-[^11]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:180-216`
+[^11]: Scala: [`ErgoTransaction.scala:180-216`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L180-L216)
 
-[^12]: Rust: `ergo-lib/src/chain/transaction/ergo_transaction.rs:37-48`
+[^12]: Rust: [`ergo_transaction.rs:37-48`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/ergo_transaction.rs#L37-L48)
 
-[^13]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:110-161`
+[^13]: Scala: [`ErgoTransaction.scala:110-161`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L110-L161)
 
-[^14]: Rust: `ergo-lib/src/wallet/signing.rs:143-180`
+[^14]: Rust: [`signing.rs:143-180`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/signing.rs#L143-L180)
 
-[^15]: Scala: `ergo-core/src/main/scala/org/ergoplatform/nodeView/ErgoContext.scala:12-29`
+[^15]: Scala: [`ErgoContext.scala:12-29`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/nodeView/ErgoContext.scala#L12-L29)
 
-[^16]: Rust: `ergo-lib/src/wallet/signing.rs:46-116`
+[^16]: Rust: [`signing.rs:46-116`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/signing.rs#L46-L116)
 
-[^17]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala:42-55`
+[^17]: Scala: [`ErgoInterpreter.scala:42-55`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala#L42-L55)
 
-[^18]: Rust: `ergo-lib/src/chain/transaction/storage_rent.rs:12-78`
+[^18]: Rust: [`storage_rent.rs:12-78`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/storage_rent.rs#L12-L78)

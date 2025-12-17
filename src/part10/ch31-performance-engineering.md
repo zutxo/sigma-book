@@ -8,17 +8,20 @@
 
 ## Prerequisites
 
-- Evaluation model ([Chapter 12](../part5/ch12-evaluation-model.md))
-- Serialization ([Chapter 7](../part2/ch07-serialization.md))
-- Cost model ([Chapter 13](../part5/ch13-cost-model.md))
+- [Chapter 12](../part5/ch12-evaluation-model.md) for evaluation model fundamentals that define hot paths
+- [Chapter 7](../part3/ch07-serialization-framework.md) for serialization patterns to optimize
+- [Chapter 13](../part5/ch13-cost-model.md) for understanding cost accounting overhead
 
 ## Learning Objectives
 
-- Understand performance-critical patterns in interpreters
-- Master comptime for zero-cost abstractions
-- Apply data-oriented design for cache efficiency
-- Use SIMD and vectorization for throughput
-- Profile and benchmark systematically
+By the end of this chapter, you will be able to:
+
+- Identify performance-critical paths in script interpretation
+- Apply Zig's comptime for zero-cost abstractions and type dispatch
+- Design data structures using Struct-of-Arrays (SoA) for cache efficiency
+- Use arena allocators to batch allocations and reduce overhead
+- Implement SIMD and vectorization for throughput-critical operations
+- Profile and benchmark interpreter components systematically
 
 ## Performance Architecture
 
@@ -86,7 +89,7 @@ fn getField(comptime T: type, comptime field: []const u8, ptr: *const T) *const 
 
 ## Data-Oriented Design
 
-Structure data for cache efficiency:
+Structure data for cache efficiency. The Array-of-Structs to Struct-of-Arrays transformation is a semantics-preserving isomorphism: `Array[n](A × B) ≅ Array[n](A) × Array[n](B)`. Both represent the same data with identical behavior, but different memory layouts yield dramatically different cache performance:
 
 ```zig
 /// Bad: Array of Structs (AoS) - poor cache locality for iteration
@@ -527,14 +530,14 @@ const Vec4 = @Vector(4, u64);
 
 *Next: [Appendix A: Type Codes](../appendices/appendix-a-type-codes.md)*
 
-[^1]: Scala: `docs/perf-style-guide.md` (HOTSPOT patterns)
+[^1]: Scala: [`perf-style-guide.md`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/perf-style-guide.md) (HOTSPOT patterns)
 
 [^2]: Rust: Performance-oriented design throughout sigma-rust crates
 
-[^3]: Scala: `core/shared/src/main/scala/sigma/util/MemoizedFunc.scala`
+[^3]: Scala: [`MemoizedFunc.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/util/MemoizedFunc.scala)
 
 [^4]: Rust: Memoization patterns in ergotree-interpreter
 
-[^5]: Scala: `interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala` (fixedCostOp)
+[^5]: Scala: [`CErgoTreeEvaluator.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala) (fixedCostOp)
 
-[^6]: Rust: `ergotree-interpreter/src/eval.rs` (cost tracking)
+[^6]: Rust: [`eval.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs) (cost tracking)

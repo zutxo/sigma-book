@@ -8,21 +8,25 @@
 
 ## Prerequisites
 
-- Sigma protocols ([Chapter 11](../part4/ch11-sigma-protocols.md))
-- Evaluation model ([Chapter 12](./ch12-evaluation-model.md))
-- Cost model ([Chapter 13](./ch13-cost-model.md))
+- [Chapter 11](../part4/ch11-sigma-protocols.md) for Sigma protocol verification and Fiat-Shamir transformation
+- [Chapter 12](./ch12-evaluation-model.md) for ErgoTree reduction to SigmaBoolean
+- [Chapter 13](./ch13-cost-model.md) for cost accumulation during verification
 
 ## Learning Objectives
 
-- Understand complete verification flow from ErgoTree to boolean result
-- Implement the verify() and fullReduction() methods
-- Handle soft-fork conditions gracefully
-- Verify cryptographic signatures with Fiat-Shamir
-- Estimate verification cost before expensive operations
+By the end of this chapter, you will be able to:
+
+- Trace the complete verification flow from ErgoTree to boolean result
+- Implement `verify()` and `fullReduction()` methods
+- Handle soft-fork conditions gracefully to maintain network compatibility
+- Verify cryptographic signatures using Fiat-Shamir commitment reconstruction
+- Estimate verification cost before performing expensive cryptographic operations
 
 ## Verification Overview
 
-The verifier determines whether a proof satisfies an ErgoTree script[^1][^2]:
+Verification is the counterpart to proving: given an ErgoTree, a transaction context, and a cryptographic proof, the verifier determines whether the proof is valid. This process happens for every input box in every transaction—efficient verification is critical for blockchain throughput.
+
+The verification proceeds in two phases: first reduce the ErgoTree to a SigmaBoolean proposition (using the evaluator from Chapter 12), then verify the cryptographic proof satisfies that proposition[^1][^2].
 
 ```
 Verification Pipeline
@@ -604,45 +608,46 @@ const TestVerifier = struct {
 
 ## Summary
 
-- **Verification** has two phases: reduction and cryptographic verification
-- **fullReduction()** evaluates ErgoTree to SigmaBoolean with cost tracking
-- **verifySignature()** implements Verifier Steps 4-6 of Sigma protocol
-- **Soft-fork handling** accepts unrecognized scripts to allow protocol upgrades
-- **Cost estimation** predicts crypto cost before expensive operations
-- **computeCommitments** reconstructs commitments from challenges and responses
-- **Fiat-Shamir hash** confirms the proof's integrity
-- **DeserializeContext** nodes are substituted before reduction
+This chapter covered the verifier implementation that validates Sigma proofs:
+
+- **Verification proceeds in two phases**: reduction (ErgoTree → SigmaBoolean) and cryptographic verification (proof checking)
+- **`fullReduction()`** evaluates the ErgoTree to a SigmaBoolean proposition while tracking costs
+- **`verifySignature()`** implements Verifier Steps 4-6: parse proof bytes, compute expected commitments from challenges and responses, then verify via Fiat-Shamir hash
+- **Soft-fork handling** accepts scripts with unrecognized versions or opcodes, enabling protocol upgrades without network splits
+- **Cost estimation** predicts cryptographic verification cost before performing expensive EC operations, failing early if the limit would be exceeded
+- **Commitment reconstruction** (`computeCommitments`) derives the prover's commitments from the challenges and responses, which must match the Fiat-Shamir challenge
+- **`DeserializeContext`** nodes are substituted with their deserialized values before reduction begins
 
 ---
 
 *Next: [Chapter 15: Prover Implementation](./ch15-prover-implementation.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:30-100`
+[^1]: Scala: [`Interpreter.scala:30-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L30-L100)
 
-[^2]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:27-52`
+[^2]: Rust: [`verifier.rs:27-52`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L27-L52)
 
-[^3]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:78-92`
+[^3]: Scala: [`Interpreter.scala:78-92`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L78-L92)
 
-[^4]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:55-88`
+[^4]: Rust: [`verifier.rs:55-88`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L55-L88)
 
-[^5]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:132-167`
+[^5]: Scala: [`Interpreter.scala:132-167`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L132-L167)
 
-[^6]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:196-239`
+[^6]: Scala: [`Interpreter.scala:196-239`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L196-L239)
 
-[^7]: Rust: `ergotree-interpreter/src/eval.rs:130-160`
+[^7]: Rust: [`eval.rs:130-160`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs#L130-L160)
 
-[^8]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:282-298`
+[^8]: Scala: [`Interpreter.scala:282-298`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L282-L298)
 
-[^9]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:91-125`
+[^9]: Rust: [`verifier.rs:91-125`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L91-L125)
 
-[^10]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:324-347`
+[^10]: Scala: [`Interpreter.scala:324-347`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L324-L347)
 
-[^11]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:127-163`
+[^11]: Rust: [`verifier.rs:127-163`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L127-L163)
 
-[^12]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:362-408`
+[^12]: Scala: [`Interpreter.scala:362-408`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L362-L408)
 
-[^13]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:450-472`
+[^13]: Scala: [`Interpreter.scala:450-472`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L450-L472)
 
-[^14]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala:492-517`
+[^14]: Scala: [`Interpreter.scala:492-517`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala#L492-L517)
 
-[^15]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:166-168`
+[^15]: Rust: [`verifier.rs:166-168`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L166-L168)

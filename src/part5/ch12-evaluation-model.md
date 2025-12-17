@@ -8,20 +8,22 @@
 
 ## Prerequisites
 
-- AST structure ([Chapter 4](../part2/ch04-value-nodes.md))
-- Operations ([Chapter 5](../part2/ch05-operations-opcodes.md))
-- ErgoTree structure ([Chapter 3](../part1/ch03-ergotree-structure.md))
+- [Chapter 4](../part2/ch04-value-nodes.md) for the AST structure and Value hierarchy
+- [Chapter 5](../part2/ch05-operations-opcodes.md) for opcodes and cost descriptors
+- [Chapter 3](../part1/ch03-ergotree-structure.md) for ErgoTree format and constant segregation
 
 ## Learning Objectives
 
-- Understand direct-style big-step interpretation
-- Implement eval dispatch for AST nodes
-- Work with DataEnv for variable binding
-- Track costs during evaluation
+By the end of this chapter, you will be able to:
+
+- Explain direct-style big-step interpretation and why it suits ErgoTree evaluation
+- Implement `eval` dispatch for AST node types (constants, variables, functions, operations)
+- Work with the `Env` environment structure for variable binding and closure capture
+- Track accumulated costs during evaluation to enforce resource limits
 
 ## Evaluation Architecture
 
-The interpreter uses direct-style big-step evaluation[^1][^2]:
+The Sigma interpreter transforms an ErgoTree expression into a SigmaBoolean proposition that can be proven or verified. This "reduction" process uses direct-style big-step evaluation—each expression immediately returns its result value rather than producing intermediate steps. This approach is simpler than continuation-passing style while still supporting the necessary features: lexical closures, short-circuit evaluation, and cost tracking[^1][^2].
 
 ```
 Evaluation Flow
@@ -499,39 +501,41 @@ pub fn reduceToSigmaBoolean(
 
 ## Summary
 
-- **Direct-style** big-step interpreter evaluates expressions recursively
-- **Env** maps variable IDs to values; immutable with functional updates
-- **Each node** implements `eval()` returning Value and accumulating cost
-- **BlockValue** extends environment with ValDef bindings
-- **FuncValue** creates closures capturing the environment
-- **If** uses short-circuit evaluation (only one branch executed)
-- **Collection ops** (map, filter, fold) have per-item costs
-- Top-level reduces to **SigmaBoolean** for cryptographic verification
+This chapter covered the evaluation model that transforms ErgoTree expressions into SigmaBoolean propositions:
+
+- **Direct-style big-step interpretation** evaluates expressions recursively, with each node immediately returning its result value
+- **`Env`** maps variable IDs to values using immutable functional updates—each `extend()` creates a new environment with additional bindings
+- **Each AST node** implements an `eval()` method that returns a `Value` and accumulates execution cost
+- **`BlockValue`** extends the environment with `ValDef` bindings, enabling local variable definitions
+- **`FuncValue`** creates closures that capture the current environment, enabling lexical scoping
+- **`If`** implements short-circuit evaluation—only the taken branch is evaluated, reducing unnecessary computation and cost
+- **Collection operations** (`Map`, `Filter`, `Fold`) have per-item costs reflecting their iteration over elements
+- **Top-level reduction** produces a `SigmaBoolean` proposition that the prover/verifier can then handle cryptographically
 
 ---
 
 *Next: [Chapter 13: Cost Model](./ch13-cost-model.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/CErgoTreeEvaluator.scala`
+[^1]: Scala: [`CErgoTreeEvaluator.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/CErgoTreeEvaluator.scala)
 
-[^2]: Rust: `ergotree-interpreter/src/eval.rs:1-100`
+[^2]: Rust: [`eval.rs:1-100`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs#L1-L100)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/eval/ErgoTreeEvaluator.scala` (DataEnv)
+[^3]: Scala: [`ErgoTreeEvaluator.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/eval/ErgoTreeEvaluator.scala) (DataEnv)
 
-[^4]: Rust: `ergotree-interpreter/src/eval/env.rs`
+[^4]: Rust: [`env.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/env.rs)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala` (eval methods)
+[^5]: Scala: [`values.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala) (eval methods)
 
-[^6]: Rust: `ergotree-interpreter/src/eval/expr.rs:14-100`
+[^6]: Rust: [`expr.rs:14-100`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/expr.rs#L14-L100)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala` (ConstantNode.eval)
+[^7]: Scala: [`values.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala) (ConstantNode.eval)
 
-[^8]: Rust: `ergotree-interpreter/src/eval/val_use.rs`
+[^8]: Rust: [`val_use.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/val_use.rs)
 
-[^9]: Rust: `ergotree-interpreter/src/eval/block.rs`
+[^9]: Rust: [`block.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/block.rs)
 
-[^10]: Rust: `ergotree-interpreter/src/eval/func_value.rs`
+[^10]: Rust: [`func_value.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/func_value.rs)
 
-[^11]: Rust: `ergotree-interpreter/src/eval/if_op.rs`
+[^11]: Rust: [`if_op.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/if_op.rs)
 
-[^12]: Rust: `ergotree-interpreter/src/eval/coll_map.rs`, `coll_fold.rs`
+[^12]: Rust: [`coll_map.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/coll_map.rs), [`coll_fold.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/coll_fold.rs)

@@ -8,24 +8,32 @@
 
 ## Prerequisites
 
-- Basic type system concepts (generic types, type hierarchies)
+- Basic type system concepts (static vs dynamic typing, generic types)
+- Understanding of binary serialization concepts
 - Prior chapters: [Chapter 1](./ch01-introduction.md)
 
 ## Learning Objectives
 
-- List and describe all ErgoTree primitive types
-- Explain type code encoding for serialization
-- Distinguish embeddable from non-embeddable types
-- Work with collection, option, and tuple types
+By the end of this chapter, you will be able to:
+
+- Identify all ErgoTree primitive types and their numeric ranges
+- Understand why type codes exist and how they enable compact serialization
+- Explain the "embeddable" type concept and its efficiency benefits
+- Construct collection, option, tuple, and function types
+- Recognize version-specific type additions (v6 and beyond)
 
 ## Type System Overview
 
-ErgoTree uses a **static type system** with[^1][^2]:
+Every value in ErgoTree has a statically-known type. Unlike dynamically-typed languages where types are checked at runtime, ErgoTree's type system catches errors at compile time—before the script ever reaches the blockchain.
 
-- **Structural typing**: Types defined by structure, not names
-- **Type inference**: Many types inferred automatically
-- **Generic types**: Parameterized collections and options
-- **Type codes**: Unique byte codes for serialization
+The type system provides[^1][^2]:
+
+- **Static typing**: All types known at compile time, enabling early error detection
+- **Type inference**: The compiler automatically deduces types in most cases
+- **Generic types**: Collections and options parameterized over element types
+- **Type codes**: Each type has a unique numeric code enabling compact binary serialization
+
+Understanding type codes is essential because they directly affect how data is serialized on-chain. The type system is carefully designed so that common types serialize to single bytes, minimizing transaction size.
 
 ```zig
 /// Base type descriptor
@@ -250,7 +258,11 @@ const TypeCodes = struct {
 
 ## Embeddable Types
 
-Embeddable types combine with type constructors for single-byte encoding[^8]:
+The type system's most elegant optimization is the concept of **embeddable types**. These nine primitive types (codes 1–9) can be "embedded" directly into type constructor codes, allowing common composite types to serialize as a single byte.
+
+Consider `Coll[Int]` (a collection of integers). Without embedding, this would require two bytes: one for "Collection" and one for "Int". With embedding, it serializes as a single byte: `12 + 4 = 16`. This matters because type information appears frequently in serialized ErgoTrees—every constant, every expression result has a type.
+
+The embedding formula is simple[^8]:
 
 ```zig
 /// Embed primitive type code into constructor
@@ -439,38 +451,43 @@ pub fn allPredefTypes(version: ErgoTreeVersion) []const SType {
 
 ## Summary
 
-- Every type has a unique **type code** for serialization
-- **Embeddable types** (codes 1-9) combine with constructors for single-byte encoding
-- Numeric types form an ordered hierarchy with exact conversions
-- **SigmaProp** is the required return type for all scripts
-- v6 adds `SUnsignedBigInt` and enhanced numeric operations
+This chapter covered ErgoTree's type system, which provides the foundation for type-safe script execution:
+
+- **Type codes** (unique numeric identifiers) enable compact binary serialization—critical for on-chain storage efficiency
+- **Embeddable types** (codes 1–9) combine with type constructors using a clever arithmetic encoding, reducing common types to single bytes
+- **Numeric types** form an ordered hierarchy (Byte < Short < Int < Long < BigInt) with safe upcasting and checked downcasting
+- **SigmaProp** is the required return type for all ErgoScript contracts—it represents the cryptographic proposition that must be proven
+- **Object types** (Box, Context, Header) provide access to blockchain state during script execution
+- Version 6 introduces `SUnsignedBigInt` and additional numeric operations for greater expressiveness
+
+The type system ensures that scripts are well-formed before execution, preventing runtime type errors that could cause consensus failures. In the next chapter, we'll see how these types are organized into the ErgoTree structure—the actual format stored on-chain.
 
 ---
 
 *Next: [Chapter 3: ErgoTree Structure](./ch03-ergotree-structure.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:17-61`
+[^1]: Scala: [`SType.scala:17-61`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L17-L61)
 
-[^2]: Rust: `ergotree-ir/src/types/stype.rs:27-76`
+[^2]: Rust: [`stype.rs:27-76`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/stype.rs#L27-L76)
 
-[^3]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:395-575` (numeric type definitions)
+[^3]: Scala: [`SType.scala:395-575`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L395-L575) (numeric type definitions)
 
-[^4]: Rust: `ergotree-ir/src/types/snumeric.rs:12-37` (method IDs)
+[^4]: Rust: [`snumeric.rs:12-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/snumeric.rs#L12-L37) (method IDs)
 
-[^5]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala` (SGroupElement definition)
+[^5]: Scala: [`SType.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala) (SGroupElement definition)
 
-[^6]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala` (SSigmaProp definition)
+[^6]: Scala: [`SType.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala) (SSigmaProp definition)
 
-[^7]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:320-332` (type code ranges)
+[^7]: Scala: [`SType.scala:320-332`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L320-L332) (type code ranges)
 
-[^8]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:305-313` (SEmbeddable trait)
+[^8]: Scala: [`SType.scala:305-313`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L305-L313) (SEmbeddable trait)
 
-[^9]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:743-799` (SCollection)
+[^9]: Scala: [`SType.scala:743-799`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L743-L799) (SCollection)
 
-[^10]: Rust: `ergotree-ir/src/types/scoll.rs`
+[^10]: Rust: [`scoll.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/scoll.rs)
 
-[^11]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:691-741` (SOption)
+[^11]: Scala: [`SType.scala:691-741`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L691-L741) (SOption)
 
-[^12]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:67-95` (type variables)
+[^12]: Scala: [`SType.scala:67-95`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L67-L95) (type variables)
 
-[^13]: Scala: `core/shared/src/main/scala/sigma/ast/SType.scala:105-128` (version differences)
+[^13]: Scala: [`SType.scala:105-128`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/SType.scala#L105-L128) (version differences)

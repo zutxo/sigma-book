@@ -8,17 +8,19 @@
 
 ## Prerequisites
 
-- Type system ([Chapter 2](../part1/ch02-type-system.md))
-- Operations ([Chapter 5](../part2/ch05-operations-opcodes.md))
-- Evaluation model ([Chapter 12](../part5/ch12-evaluation-model.md))
+- [Chapter 2](../part1/ch02-type-system.md) for `Coll[T]` type and type parameters
+- [Chapter 5](../part2/ch05-operations-opcodes.md) for collection operation opcodes
+- [Chapter 12](../part5/ch12-evaluation-model.md) for how collection operations are evaluated
 
 ## Learning Objectives
 
-- Understand the Coll[T] interface and operations
-- Implement array-backed collections
-- Master Structure-of-Arrays optimization for pairs
-- Work with CollBuilder for creating collections
-- Know cost implications of collection operations
+By the end of this chapter, you will be able to:
+
+- Explain the `Coll[T]` interface and its core operations (map, filter, fold, etc.)
+- Implement array-backed collections with bounds checking
+- Describe the Structure-of-Arrays optimization for pair collections
+- Use `CollBuilder` for creating and manipulating collections
+- Understand cost implications of collection operations
 
 ## Collection Architecture
 
@@ -213,7 +215,7 @@ const FoldCost = PerItemCost{
 
 ## Predicate Operations
 
-Exists, forall with short-circuit evaluation[^7]:
+Exists, forall with short-circuit evaluation[^7]. Note: Short-circuit behavior means execution time varies based on collection contents. This is acceptable in blockchain contexts where data is public, but would be a timing side-channel if collections contained secrets.
 
 ```zig
 /// Predicate operations (short-circuit)
@@ -786,32 +788,32 @@ const CollSetOps = struct {
 
 *Next: [Chapter 21: AVL Trees](./ch21-avl-trees.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/Colls.scala:12-50` (Coll trait)
+[^1]: Scala: [`Colls.scala:12-50`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/Colls.scala#L12-L50) (Coll trait)
 
-[^2]: Rust: `ergotree-ir/src/mir/collection.rs:21-32` (Collection enum)
+[^2]: Rust: [`collection.rs:21-32`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/collection.rs#L21-L32) (Collection enum)
 
-[^3]: Scala: `core/shared/src/main/scala/sigma/Colls.scala:50-100` (core operations)
+[^3]: Scala: [`Colls.scala:50-100`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/Colls.scala#L50-L100) (core operations)
 
-[^4]: Rust: `ergotree-ir/src/mir/coll_by_index.rs` (ByIndex)
+[^4]: Rust: [`coll_by_index.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/coll_by_index.rs) (ByIndex)
 
-[^5]: Scala: `core/shared/src/main/scala/sigma/data/CollsOverArrays.scala:30-50` (map, filter)
+[^5]: Scala: [`CollsOverArrays.scala:30-50`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/CollsOverArrays.scala#L30-L50) (map, filter)
 
-[^6]: Rust: `ergotree-ir/src/mir/coll_map.rs:17-62` (Map struct)
+[^6]: Rust: [`coll_map.rs:17-62`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/coll_map.rs#L17-L62) (Map struct)
 
-[^7]: Rust: `ergotree-ir/src/mir/coll_exists.rs`, `coll_forall.rs`
+[^7]: Rust: [`coll_exists.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/coll_exists.rs), [`coll_forall.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/coll_forall.rs)
 
-[^8]: Scala: `core/shared/src/main/scala/sigma/data/CollsOverArrays.scala:50-80` (slice, append)
+[^8]: Scala: [`CollsOverArrays.scala:50-80`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/CollsOverArrays.scala#L50-L80) (slice, append)
 
-[^9]: Scala: `core/shared/src/main/scala/sigma/Colls.scala:150-180` (PairColl trait)
+[^9]: Scala: [`Colls.scala:150-180`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/Colls.scala#L150-L180) (PairColl trait)
 
-[^10]: Scala: `core/shared/src/main/scala/sigma/data/CollsOverArrays.scala:200-280` (PairOfCols)
+[^10]: Scala: [`CollsOverArrays.scala:200-280`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/CollsOverArrays.scala#L200-L280) (PairOfCols)
 
-[^11]: Scala: `core/shared/src/main/scala/sigma/Colls.scala:180-220` (CollBuilder trait)
+[^11]: Scala: [`Colls.scala:180-220`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/Colls.scala#L180-L220) (CollBuilder trait)
 
-[^12]: Scala: `core/shared/src/main/scala/sigma/data/CollsOverArrays.scala:300-400` (CollOverArrayBuilder)
+[^12]: Scala: [`CollsOverArrays.scala:300-400`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/CollsOverArrays.scala#L300-L400) (CollOverArrayBuilder)
 
-[^13]: Rust: `ergotree-ir/src/mir/collection.rs:34-56` (Collection::new)
+[^13]: Rust: [`collection.rs:34-56`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/collection.rs#L34-L56) (Collection::new)
 
-[^14]: Rust: `ergotree-ir/src/mir/collection.rs:100-136` (serialization)
+[^14]: Rust: [`collection.rs:100-136`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/collection.rs#L100-L136) (serialization)
 
-[^15]: Scala: `core/shared/src/main/scala/sigma/data/CollsOverArrays.scala:100-150` (set operations)
+[^15]: Scala: [`CollsOverArrays.scala:100-150`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/CollsOverArrays.scala#L100-L150) (set operations)

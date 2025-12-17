@@ -8,17 +8,19 @@
 
 ## Prerequisites
 
-- UTXO model basics
-- ErgoTree structure ([Chapter 3](../part1/ch03-ergotree-structure.md))
-- Collections ([Chapter 20](./ch20-collections.md))
+- Understanding of UTXO (Unspent Transaction Output) model basics
+- [Chapter 3](../part1/ch03-ergotree-structure.md) for ErgoTree format stored in boxes
+- [Chapter 20](./ch20-collections.md) for collection types used in registers
 
 ## Learning Objectives
 
-- Understand the Ergo box as the fundamental UTXO structure
-- Learn the register-based data model (R0-R9)
-- Master token representation and management
-- Understand box ID computation and reference semantics
-- Implement box serialization
+By the end of this chapter, you will be able to:
+
+- Explain the Ergo box as the fundamental UTXO structure with extended capabilities
+- Work with the register-based data model (R0-R3 mandatory, R4-R9 optional)
+- Manage tokens—the multi-asset feature of Ergo boxes
+- Compute box IDs using Blake2b256 hashing of serialized content
+- Implement box serialization and deserialization
 
 ## Box Architecture
 
@@ -35,7 +37,7 @@ Box Structure
 ├─────────────────────────────────────────────────────┤
 │                   Mandatory Registers               │
 │  ┌───────────────────────────────────────────────┐  │
-│  │ R0: Long           Monetary value (NanoErgs)  │  │
+│  │ R0: Long           Value in nanoERG (10⁻⁹ ERG)│  │
 │  │ R1: ErgoTree       Guarding script            │  │
 │  │ R2: Coll[Token]    Secondary tokens           │  │
 │  │ R3: (Int, Bytes)   Creation info              │  │
@@ -75,7 +77,8 @@ const ErgoBox = struct {
     /// Output index in transaction (part of R3)
     index: u16,
 
-    pub const MAX_TOKENS_COUNT: usize = 122;
+    /// Protocol: 255 (u8), practical: ~122 due to box size limit
+    pub const MAX_TOKENS_COUNT: usize = 255;
     pub const MAX_BOX_SIZE: usize = 4096;
     pub const MAX_SCRIPT_SIZE: usize = 4096;
 
@@ -162,7 +165,7 @@ Register Layout
 ─────────────────────────────────────────────────────
  ID    Type                   Purpose
 ─────────────────────────────────────────────────────
- R0    Long                   Monetary value (NanoErgs)
+ R0    Long                   Value in nanoERG (10⁻⁹ ERG)
  R1    Coll[Byte]             Serialized ErgoTree
  R2    Coll[(Coll[Byte],Long)] Secondary tokens
  R3    (Int, Coll[Byte])      (height, txId ++ index)
@@ -479,11 +482,12 @@ Token minting rule:
 Token Creation Rule
 ─────────────────────────────────────────────────────
 
-A new token can be minted when:
-  token_id == INPUTS(0).id
+A new token can ONLY be minted when:
+  token_id == INPUTS(0).id   (MUST equal first input's box ID)
 
-This ensures uniqueness: only the owner of a box
-can create tokens with that box's ID as token ID.
+This is a consensus rule enforced by the protocol.
+Only the first input's box ID can be used as a new token ID.
+This ensures uniqueness: tokens are "born" from a specific box.
 
 ┌─────────────┐     Spend      ┌─────────────────┐
 │  Input Box  │ ─────────────► │   Output Box    │
@@ -562,17 +566,20 @@ Box Constraints
 ─────────────────────────────────────────────────────
 Limit                    Value     Notes
 ─────────────────────────────────────────────────────
-Max box size             4 KB      Total serialized
-Max tokens per box       122       Computed from size
+Max box size             4 KB      Total serialized bytes
+Max tokens per box       255       Protocol limit (u8)
+  (practical limit)      ~122      Due to 4KB size limit
 Max registers            10        R0-R9
-Max script size          4 KB      ErgoTree in R1
+Max script size          4 KB      ErgoTree in R1 (part of box)
 ─────────────────────────────────────────────────────
 ```
 
 ```zig
 const SigmaConstants = struct {
     pub const MAX_BOX_SIZE: usize = 4 * 1024;
-    pub const MAX_TOKENS: usize = 122;
+    /// Protocol allows 255 (u8), but ~122 fit within MAX_BOX_SIZE
+    pub const MAX_TOKENS_PROTOCOL: usize = 255;
+    pub const MAX_TOKENS_PRACTICAL: usize = 122;
     pub const MAX_REGISTERS: usize = 10;
 };
 ```
@@ -684,7 +691,7 @@ pub fn extractRegisterAs(
 - **R0-R3** are mandatory (value, script, tokens, creation info)
 - **R4-R9** are application-defined, must be densely packed
 - **Box ID** is Blake2b256 hash of serialized content including tx reference
-- **Tokens** stored in R2, max 122 per box, minted via first input's ID
+- **Tokens** stored in R2, max 255 per box (protocol), ~122 practical; token ID MUST equal first input's box ID
 - **Type-safe access** with three outcomes: None, Some(value), or InvalidType
 - **4KB limit** on total box size
 
@@ -692,42 +699,42 @@ pub fn extractRegisterAs(
 
 *Next: [Chapter 23: Interpreter Wrappers](../part8/ch23-interpreter-wrappers.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala:50-59`
+[^1]: Scala: [`ErgoBox.scala:50-59`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala#L50-L59)
 
-[^2]: Rust: `ergotree-ir/src/chain/ergo_box.rs:38-80`
+[^2]: Rust: [`ergo_box.rs:38-80`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L38-L80)
 
-[^3]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBoxCandidate.scala:36-41`
+[^3]: Scala: [`ErgoBoxCandidate.scala:36-41`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBoxCandidate.scala#L36-L41)
 
-[^4]: Rust: `ergotree-ir/src/chain/ergo_box.rs:225-248`
+[^4]: Rust: [`ergo_box.rs:225-248`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L225-L248)
 
-[^5]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala:154-168`
+[^5]: Scala: [`ErgoBox.scala:154-168`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala#L154-L168)
 
-[^6]: Rust: `ergotree-ir/src/chain/ergo_box/register/id.rs:78-90`
+[^6]: Rust: [`id.rs:78-90`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box/register/id.rs#L78-L90)
 
-[^7]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala` (additionalRegisters)
+[^7]: Scala: [`ErgoBox.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala) (additionalRegisters)
 
-[^8]: Rust: `ergotree-ir/src/chain/ergo_box/register.rs:27-91`
+[^8]: Rust: [`register.rs:27-91`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box/register.rs#L27-L91)
 
-[^9]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala:72-73`
+[^9]: Scala: [`ErgoBox.scala:72-73`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala#L72-L73)
 
-[^10]: Rust: `ergotree-ir/src/chain/ergo_box.rs:149-153`
+[^10]: Rust: [`ergo_box.rs:149-153`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L149-L153)
 
-[^11]: Scala: `data/shared/src/main/scala/sigma/data/CBox.scala:77-94`
+[^11]: Scala: [`CBox.scala:77-94`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/data/CBox.scala#L77-L94)
 
-[^12]: Rust: `ergotree-ir/src/chain/ergo_box.rs:156-168`
+[^12]: Rust: [`ergo_box.rs:156-168`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L156-L168)
 
-[^13]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:1263` (SBoxMethods)
+[^13]: Scala: [`methods.scala:1263`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala#L1263) (SBoxMethods)
 
-[^14]: Rust: `ergotree-ir/src/mir/extract_reg_as.rs:18-57`
+[^14]: Rust: [`extract_reg_as.rs:18-57`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/extract_reg_as.rs#L18-L57)
 
-[^15]: Scala: `data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala:119-130`
+[^15]: Scala: [`ErgoBox.scala:119-130`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/org/ergoplatform/ErgoBox.scala#L119-L130)
 
-[^16]: Rust: `ergotree-ir/src/chain/ergo_box.rs:36-37` (BoxTokens)
+[^16]: Rust: [`ergo_box.rs:36-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L36-L37) (BoxTokens)
 
-[^17]: Scala: `core/shared/src/main/scala/sigma/SigmaDsl.scala:414-536`
+[^17]: Scala: [`SigmaDsl.scala:414-536`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/SigmaDsl.scala#L414-L536)
 
-[^18]: Rust: `ergotree-ir/src/chain/ergo_box.rs:120-198`
+[^18]: Rust: [`ergo_box.rs:120-198`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/ergo_box.rs#L120-L198)
 
-[^19]: Scala: `data/shared/src/main/scala/sigma/data/CBox.scala:20-74`
+[^19]: Scala: [`CBox.scala:20-74`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/data/CBox.scala#L20-L74)
 
-[^20]: Rust: `ergotree-interpreter/src/eval/extract_reg_as.rs:15-47`
+[^20]: Rust: [`extract_reg_as.rs:15-47`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/extract_reg_as.rs#L15-L47)

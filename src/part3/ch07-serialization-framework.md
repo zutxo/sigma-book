@@ -8,19 +8,22 @@
 
 ## Prerequisites
 
-- Binary encoding concepts (bits, bytes)
-- Prior chapters: [Chapter 2](../part1/ch02-type-system.md), [Chapter 5](../part2/ch05-operations-opcodes.md)
+- Binary encoding concepts (bits, bytes, big-endian vs little-endian)
+- Familiarity with variable-length encoding techniques and their space-efficiency trade-offs
+- Prior chapters: [Chapter 2](../part1/ch02-type-system.md) for type codes, [Chapter 5](../part2/ch05-operations-opcodes.md) for opcodes
 
 ## Learning Objectives
 
-- Understand VLQ and ZigZag encoding for compact integers
-- Implement type serialization using type code embedding
-- Work with `SigmaByteReader` and `SigmaByteWriter`
-- Apply cost tracking during serialization
+By the end of this chapter, you will be able to:
+
+- Explain VLQ (Variable-Length Quantity) encoding and how it achieves compact integer representation
+- Describe ZigZag encoding and why it improves VLQ efficiency for signed integers
+- Implement type serialization using the type code embedding scheme
+- Use `SigmaByteReader` and `SigmaByteWriter` for type-aware serialization
 
 ## Serialization Architecture
 
-The serialization system uses a layered design[^1][^2]:
+Blockchain storage is expensive—every byte of an ErgoTree increases transaction fees and network bandwidth. The serialization framework therefore prioritizes compactness while maintaining determinism (identical inputs must produce identical outputs across all implementations). The system uses a layered design where each layer handles a specific concern[^1][^2]:
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -135,7 +138,7 @@ Unsigned Value           Bytes
 
 ## ZigZag Encoding
 
-For signed integers, ZigZag maps negatives to positives before VLQ[^5][^6]:
+VLQ assumes non-negative values—it encodes the magnitude directly. For signed integers like `-1`, the two's complement representation has all high bits set, resulting in maximum VLQ length. ZigZag encoding solves this by mapping signed values to unsigned in a way that preserves magnitude: small positive and negative numbers both produce small unsigned values[^5][^6]:
 
 ```
 Signed    ZigZag Encoded
@@ -709,39 +712,41 @@ Coll[Int] → single byte
 
 ## Summary
 
-- **VLQ encoding** represents integers compactly; small values use fewer bytes
-- **ZigZag encoding** maps signed integers to unsigned before VLQ
-- **Type codes** use embedding to serialize common types in single byte
-- **SigmaByteWriter** handles serialization with optional constant extraction
-- **SigmaByteReader** manages constant stores for placeholder resolution
-- Type serialization achieves compact encoding through code space partitioning
+This chapter covered the serialization framework that enables compact, deterministic encoding of ErgoTree structures:
+
+- **VLQ (Variable-Length Quantity) encoding** represents integers using 7 data bits per byte with a continuation flag, achieving compact representation where small values use fewer bytes
+- **ZigZag encoding** transforms signed integers to unsigned before VLQ encoding, ensuring small-magnitude values (positive or negative) remain compact
+- **Type code embedding** packs common type patterns (like `Coll[Int]` or `Option[Long]`) into single bytes by combining container and primitive codes
+- **`SigmaByteWriter`** provides type-aware serialization with optional constant extraction for segregated constant trees
+- **`SigmaByteReader`** manages deserialization state including constant stores for placeholder resolution and version tracking
+- The **type code space** (0-112) is partitioned to enable single-byte encoding for primitives, nested collections, options, and pairs
 
 ---
 
 *Next: [Chapter 8: Value Serializers](./ch08-value-serializers.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/SigmaSerializer.scala:24-60`
+[^1]: Scala: [`SigmaSerializer.scala:24-60`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/SigmaSerializer.scala#L24-L60)
 
-[^2]: Rust: `ergotree-ir/src/serialization/serializable.rs`
+[^2]: Rust: [`serializable.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/serializable.rs)
 
-[^3]: Scala: `core/shared/src/main/scala/scorex/util/serialization/VLQByteBufferWriter.scala`
+[^3]: Scala: [`VLQByteBufferWriter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/scorex/util/serialization/VLQByteBufferWriter.scala)
 
-[^4]: Rust: `sigma-ser/src/vlq_encode.rs:94-112`
+[^4]: Rust: [`vlq_encode.rs:94-112`](https://github.com/ergoplatform/sigma-rust/blob/develop/sigma-ser/src/vlq_encode.rs#L94-L112)
 
 [^5]: Scala: (via scorex-util ZigZag implementation)
 
-[^6]: Rust: `sigma-ser/src/zig_zag_encode.rs:12-40`
+[^6]: Rust: [`zig_zag_encode.rs:12-40`](https://github.com/ergoplatform/sigma-rust/blob/develop/sigma-ser/src/zig_zag_encode.rs#L12-L40)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/serialization/SigmaByteWriter.scala`
+[^7]: Scala: [`SigmaByteWriter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/SigmaByteWriter.scala)
 
-[^8]: Rust: `ergotree-ir/src/serialization/sigma_byte_writer.rs:9-69`
+[^8]: Rust: [`sigma_byte_writer.rs:9-69`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/sigma_byte_writer.rs#L9-L69)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/serialization/SigmaByteReader.scala`
+[^9]: Scala: [`SigmaByteReader.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/SigmaByteReader.scala)
 
-[^10]: Rust: `ergotree-ir/src/serialization/sigma_byte_reader.rs:12-161`
+[^10]: Rust: [`sigma_byte_reader.rs:12-161`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/sigma_byte_reader.rs#L12-L161)
 
-[^11]: Rust: `ergotree-ir/src/serialization/constant_store.rs`
+[^11]: Rust: [`constant_store.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/constant_store.rs)
 
-[^12]: Scala: `core/shared/src/main/scala/sigma/serialization/TypeSerializer.scala`
+[^12]: Scala: [`TypeSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/serialization/TypeSerializer.scala)
 
-[^13]: Rust: `ergotree-ir/src/serialization/types.rs:18-160`
+[^13]: Rust: [`types.rs:18-160`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/types.rs#L18-L160)

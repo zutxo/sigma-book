@@ -8,17 +8,19 @@
 
 ## Prerequisites
 
-- Hash functions ([Chapter 10](../part4/ch10-hash-functions.md))
-- Collections ([Chapter 20](./ch20-collections.md))
-- Binary search tree concepts
+- [Chapter 10](../part4/ch10-hash-functions.md) for BLAKE2b256 hashing used in node digests
+- [Chapter 20](./ch20-collections.md) for collection operations that AVL trees extend
+- Familiarity with binary search tree concepts and balancing
 
 ## Learning Objectives
 
-- Understand AVL+ trees as authenticated dictionaries
-- Implement digest structure and operation flags
-- Master proof-based verification model
-- Work with tree operations (contains, get, insert, update, remove)
-- Know cost implications of authenticated operations
+By the end of this chapter, you will be able to:
+
+- Explain the prover-verifier architecture for authenticated dictionaries
+- Implement the `AvlTreeData` and `ADDigest` structures storing 33-byte commitments
+- Use operation flags to control insert/update/remove permissions
+- Apply proof-based verification for tree operations (contains, get, insert, update, remove)
+- Calculate operation costs based on proof length and tree height
 
 ## Authenticated Dictionary Model
 
@@ -71,6 +73,7 @@ const AvlTreeData = struct {
     /// Permitted operations
     tree_flags: AvlTreeFlags,
     /// Fixed key length (all keys same size)
+    /// Note: In Ergo, this is always 32 bytes (Blake2b256 hash)
     key_length: u32,
     /// Optional fixed value length
     value_length_opt: ?u32,
@@ -81,7 +84,7 @@ const AvlTreeData = struct {
         return .{
             .digest = ADDigest.fromSlice(digest),
             .tree_flags = AvlTreeFlags.allOperationsAllowed(),
-            .key_length = 32, // Default: 32-byte keys
+            .key_length = 32, // Ergo: always 32 bytes (Blake2b256 hash)
             .value_length_opt = null,
         };
     }
@@ -452,7 +455,7 @@ const KeyValue = struct {
 
 ## Cost Model
 
-AVL tree operations have two-part costs[^12]:
+AVL tree operations have two-part costs[^12]. Since AVL+ trees are balanced, the tree height is **O(log n)** where n is the number of entries. Proof size is also O(log n) as proofs contain one sibling hash per tree level.
 
 ```
 AVL Tree Operation Costs
@@ -661,6 +664,7 @@ Different key order = different path = verification failure.
 ## Summary
 
 - **Authenticated dictionaries** store only 33-byte digest on-chain
+- **Ergo key size**: Always 32 bytes (Blake2b256 hash); `keyLength` field exists for generality
 - **Prover** (off-chain) holds full tree, generates proofs
 - **Verifier** (on-chain) verifies proofs with only digest
 - **Operation flags** control insert/update/remove permissions
@@ -672,32 +676,32 @@ Different key order = different path = verification failure.
 
 *Next: [Chapter 22: Box Model](./ch22-box-model.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/data/AvlTreeData.scala:43-57` (AvlTreeData case class)
+[^1]: Scala: [`AvlTreeData.scala:43-57`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/AvlTreeData.scala#L43-L57) (AvlTreeData case class)
 
-[^2]: Rust: `ergotree-ir/src/mir/avl_tree_data.rs:56-69` (AvlTreeData struct)
+[^2]: Rust: [`avl_tree_data.rs:56-69`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/avl_tree_data.rs#L56-L69) (AvlTreeData struct)
 
-[^3]: Scala: `core/shared/src/main/scala/sigma/data/AvlTreeData.scala:57` (DigestSize = 33)
+[^3]: Scala: [`AvlTreeData.scala:57`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/AvlTreeData.scala#L57) (DigestSize = 33)
 
-[^4]: Rust: `ergotree-ir/src/mir/avl_tree_data.rs:61-62` (digest field)
+[^4]: Rust: [`avl_tree_data.rs:61-62`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/avl_tree_data.rs#L61-L62) (digest field)
 
-[^5]: Scala: `core/shared/src/main/scala/sigma/data/AvlTreeData.scala:7-36` (AvlTreeFlags)
+[^5]: Scala: [`AvlTreeData.scala:7-36`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/AvlTreeData.scala#L7-L36) (AvlTreeFlags)
 
-[^6]: Rust: `ergotree-ir/src/mir/avl_tree_data.rs:10-54` (AvlTreeFlags impl)
+[^6]: Rust: [`avl_tree_data.rs:10-54`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/avl_tree_data.rs#L10-L54) (AvlTreeFlags impl)
 
-[^7]: Scala: `core/shared/src/main/scala/sigma/SigmaDsl.scala:547-589` (AvlTree trait)
+[^7]: Scala: [`SigmaDsl.scala:547-589`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/SigmaDsl.scala#L547-L589) (AvlTree trait)
 
-[^8]: Scala: `data/shared/src/main/scala/sigma/eval/AvlTreeVerifier.scala:8-88` (AvlTreeVerifier)
+[^8]: Scala: [`AvlTreeVerifier.scala:8-88`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/eval/AvlTreeVerifier.scala#L8-L88) (AvlTreeVerifier)
 
-[^9]: Scala: `interpreter/shared/src/main/scala/sigmastate/eval/CAvlTreeVerifier.scala:17-45` (CAvlTreeVerifier)
+[^9]: Scala: [`CAvlTreeVerifier.scala:17-45`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/eval/CAvlTreeVerifier.scala#L17-L45) (CAvlTreeVerifier)
 
-[^10]: Scala: `interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala:78-93` (contains_eval)
+[^10]: Scala: [`CErgoTreeEvaluator.scala:78-93`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala#L78-L93) (contains_eval)
 
-[^11]: Scala: `interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala:132-164` (insert_eval)
+[^11]: Scala: [`CErgoTreeEvaluator.scala:132-164`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/eval/CErgoTreeEvaluator.scala#L132-L164) (insert_eval)
 
-[^12]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:1498-1540` (cost info constants)
+[^12]: Scala: [`methods.scala:1498-1540`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala#L1498-L1540) (cost info constants)
 
-[^13]: Scala: `core/shared/src/main/scala/sigma/data/AvlTreeData.scala:71-90` (serializer)
+[^13]: Scala: [`AvlTreeData.scala:71-90`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/AvlTreeData.scala#L71-L90) (serializer)
 
-[^14]: Rust: `ergotree-ir/src/mir/avl_tree_data.rs:71-91` (SigmaSerializable impl)
+[^14]: Rust: [`avl_tree_data.rs:71-91`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/avl_tree_data.rs#L71-L91) (SigmaSerializable impl)
 
-[^15]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala:1588` (getMany key ordering caution)
+[^15]: Scala: [`methods.scala:1588`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala#L1588) (getMany key ordering caution)

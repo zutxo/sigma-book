@@ -304,32 +304,32 @@ const TupleMethods = struct {
 
 *[Previous: Appendix C](./appendix-c-costs.md) | [Next: Appendix E](./appendix-e-serialization.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala`
+[^1]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala)
 
-[^2]: Rust: `ergotree-ir/src/types/smethod.rs:36-99`
+[^2]: Rust: [`smethod.rs:36-99`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/smethod.rs#L36-L99)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SNumericTypeMethods)
+[^3]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SNumericTypeMethods)
 
-[^4]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SBigIntMethods)
+[^4]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SBigIntMethods)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SUnsignedBigIntMethods)
+[^5]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SUnsignedBigIntMethods)
 
-[^6]: Rust: `ergotree-ir/src/types/sgroup_elem.rs`
+[^6]: Rust: [`sgroup_elem.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sgroup_elem.rs)
 
-[^7]: Scala: `data/shared/src/main/scala/sigma/ast/methods.scala` (SSigmaPropMethods)
+[^7]: Scala: [`methods.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/methods.scala) (SSigmaPropMethods)
 
-[^8]: Rust: `ergotree-ir/src/types/sbox.rs:29-92`
+[^8]: Rust: [`sbox.rs:29-92`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sbox.rs#L29-L92)
 
-[^9]: Rust: `ergotree-ir/src/types/savltree.rs`
+[^9]: Rust: [`savltree.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/savltree.rs)
 
-[^10]: Rust: `ergotree-ir/src/types/scontext.rs`
+[^10]: Rust: [`scontext.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/scontext.rs)
 
-[^11]: Rust: `ergotree-ir/src/types/sheader.rs`
+[^11]: Rust: [`sheader.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sheader.rs)
 
-[^12]: Rust: `ergotree-ir/src/types/spreheader.rs`
+[^12]: Rust: [`spreheader.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/spreheader.rs)
 
-[^13]: Rust: `ergotree-ir/src/types/sglobal.rs`
+[^13]: Rust: [`sglobal.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/sglobal.rs)
 
-[^14]: Rust: `ergotree-ir/src/types/scoll.rs:22-266`
+[^14]: Rust: [`scoll.rs:22-266`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/scoll.rs#L22-L266)
 
-[^15]: Rust: `ergotree-ir/src/types/soption.rs`
+[^15]: Rust: [`soption.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/types/soption.rs)

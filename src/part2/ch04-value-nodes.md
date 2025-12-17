@@ -8,19 +8,22 @@
 
 ## Prerequisites
 
-- AST and tree traversal concepts
-- Prior chapters: [Chapter 2](../part1/ch02-type-system.md), [Chapter 3](../part1/ch03-ergotree-structure.md)
+- Understanding of Abstract Syntax Trees (ASTs) as hierarchical representations where each node represents a language construct
+- Tree traversal techniques (depth-first evaluation)
+- Prior chapters: [Chapter 2](../part1/ch02-type-system.md) for the type system that governs value types, [Chapter 3](../part1/ch03-ergotree-structure.md) for how values are serialized in ErgoTree
 
 ## Learning Objectives
 
-- Understand the `Value` base type and its role in ErgoTree
-- Identify different constant value types
-- Explain how evaluation works via `eval`
-- Work with compound values (collections, tuples)
+By the end of this chapter, you will be able to:
+
+- Explain the `Value` base type and its role as the foundation for all ErgoTree expression nodes
+- Distinguish between different constant value types (primitives, cryptographic, collections)
+- Describe how the `eval` method implements the evaluation semantics for each node type
+- Work with compound values including collections and tuples
 
 ## The Value Base Type
 
-All ErgoTree expression nodes are values with type, opcode, and cost[^1][^2]:
+ErgoTree is fundamentally an expression tree where every node produces a typed value. The `Value` base type defines the common interface that all expression nodes share—a type annotation, an opcode for serialization, and an evaluation method that computes the result[^1][^2].
 
 ```zig
 /// Base type for all ErgoTree expression nodes
@@ -77,6 +80,13 @@ Value
     ├── Map, Filter, Fold
     └── Exists, ForAll
 ```
+
+The hierarchy divides into several major categories:
+- **Constants** hold literal values known at compile time
+- **ConstantPlaceholder** references segregated constants by index (see Chapter 3)
+- **Compound values** (Tuple, ConcreteCollection) combine multiple values
+- **SigmaPropValue** nodes produce cryptographic propositions for signing
+- **Transformers** perform operations on collections
 
 ## Constant Values
 
@@ -195,7 +205,7 @@ pub const GroupGenerator = struct {
 
 ## Constant Placeholders
 
-When constant segregation is enabled, placeholders reference the constants array[^6][^7]:
+When constant segregation is enabled (Chapter 3), placeholders replace inline constants with index references into the constants array[^6][^7]. This separation enables template caching—the same expression tree structure can be reused with different constant values. Placeholder evaluation costs less than inline constants because the constant data has already been parsed and validated during ErgoTree deserialization.
 
 ```zig
 const ConstantPlaceholder = struct {
@@ -223,9 +233,11 @@ const ConstantPlaceholder = struct {
 
 ## Collection Values
 
+ErgoTree supports two kinds of collection nodes, optimized for different use cases:
+
 ### CollectionConstant
 
-For collections of constant values:
+For collections where all elements are known at compile time, `CollectionConstant` stores the values directly. This enables efficient serialization and avoids evaluation overhead for static data like byte arrays and fixed integer sequences.
 
 ```zig
 const CollectionConstant = struct {
@@ -246,7 +258,7 @@ const CollectionConstant = struct {
 
 ### ConcreteCollection
 
-For collections of non-constant expressions[^8]:
+When collection elements are computed expressions rather than literals, `ConcreteCollection` holds references to sub-expression nodes[^8]. Each element is evaluated at runtime, making this suitable for dynamically constructed collections.
 
 ```zig
 const ConcreteCollection = struct {
@@ -531,39 +543,42 @@ const XorOf = struct {
 
 ## Summary
 
-- `Value` is the base for all ErgoTree expression nodes
-- Every value has `tpe` (type), `op_code`, and cost info
-- Constants are pre-evaluated; `ConstantPlaceholder` references segregated constants
-- Sigma propositions produce cryptographic statements for proving
-- Boolean ops support short-circuit evaluation with accurate cost tracking
-- The `eval` method on each value defines its evaluation semantics
+This chapter introduced the value node hierarchy that forms the foundation of ErgoTree's expression tree:
+
+- **`Value`** is the base type for all ErgoTree expression nodes, defining the common interface of type, opcode, and evaluation method
+- Every value carries type information (`tpe`) used for static type checking and cost information used for bounded execution
+- **Constants** are pre-evaluated literals embedded in the tree; **`ConstantPlaceholder`** provides indirection to segregated constants for template sharing
+- **Collection values** come in two forms: `CollectionConstant` for static data and `ConcreteCollection` for computed elements
+- **Sigma proposition values** (`CreateProveDlog`, `CreateProveDHTuple`, `SigmaAnd`, `SigmaOr`) produce cryptographic propositions that require zero-knowledge proofs
+- **Boolean operations** (`AND`, `OR`) support short-circuit evaluation, charging costs only for elements actually processed
+- The `eval` method on each value type implements its evaluation semantics, transforming the AST node into a runtime value
 
 ---
 
 *Next: [Chapter 5: Operations and Opcodes](./ch05-operations-opcodes.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala:30-165`
+[^1]: Scala: [`values.scala:30-165`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala#L30-L165)
 
-[^2]: Rust: `ergotree-ir/src/mir/expr.rs:1-80`
+[^2]: Rust: [`expr.rs:1-80`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/expr.rs#L1-L80)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala:305-398`
+[^3]: Scala: [`values.scala:305-398`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala#L305-L398)
 
-[^4]: Rust: `ergotree-ir/src/mir/constant.rs:51-58`
+[^4]: Rust: [`constant.rs:51-58`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/constant.rs#L51-L58)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala` (TrueLeaf, FalseLeaf)
+[^5]: Scala: [`values.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala) (TrueLeaf, FalseLeaf)
 
-[^6]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala:400-422`
+[^6]: Scala: [`values.scala:400-422`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala#L400-L422)
 
-[^7]: Rust: `ergotree-ir/src/mir/constant/constant_placeholder.rs`
+[^7]: Rust: [`constant_placeholder.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/mir/constant/constant_placeholder.rs)
 
-[^8]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala` (ConcreteCollection)
+[^8]: Scala: [`values.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala) (ConcreteCollection)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/ast/values.scala:771-810`
+[^9]: Scala: [`values.scala:771-810`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/values.scala#L771-L810)
 
-[^10]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala:28-57`
+[^10]: Scala: [`trees.scala:28-57`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala#L28-L57)
 
-[^11]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (CreateProveDlog)
+[^11]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (CreateProveDlog)
 
-[^12]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala` (SigmaAnd, SigmaOr)
+[^12]: Scala: [`trees.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala) (SigmaAnd, SigmaOr)
 
-[^13]: Scala: `data/shared/src/main/scala/sigma/ast/trees.scala:186-299`
+[^13]: Scala: [`trees.scala:186-299`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/trees.scala#L186-L299)

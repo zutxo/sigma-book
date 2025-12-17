@@ -8,20 +8,23 @@
 
 ## Prerequisites
 
-- Basic finite field and modular arithmetic
-- Public key cryptography concepts
-- Prior chapters: Type system ([Chapter 2](../part1/ch02-type-system.md))
+- Basic finite field arithmetic: operations modulo a prime p, multiplicative inverses
+- Public key cryptography concepts: key pairs, discrete logarithm problem
+- Understanding of elliptic curves as sets of points satisfying y² = x³ + ax + b over a finite field
+- Prior chapters: [Chapter 2](../part1/ch02-type-system.md) for the `GroupElement` type
 
 ## Learning Objectives
 
-- Understand secp256k1 elliptic curve used in Sigma protocols
-- Implement group operations in Zig
-- Encode and decode group elements
-- Work with multiplicative vs additive group notation
+By the end of this chapter, you will be able to:
+
+- Explain why secp256k1 was chosen for Sigma protocols and describe its key parameters
+- Implement the discrete logarithm group interface: exponentiate, multiply, inverse
+- Encode and decode group elements using compressed SEC1 format (33 bytes)
+- Translate between multiplicative group notation (used in Sigma protocols) and additive notation (used in libraries)
 
 ## The Secp256k1 Curve
 
-Sigma protocols use **secp256k1**—the same curve as Bitcoin and Ethereum[^1][^2].
+Sigma protocols use **secp256k1**—the same elliptic curve as Bitcoin and Ethereum[^1][^2]. This choice provides several benefits: widespread library support, extensive security analysis, and compatibility with existing blockchain infrastructure. The curve offers 128-bit security (meaning the best known attack requires approximately 2^128 operations) while using 256-bit keys.
 
 ### Curve Definition
 
@@ -140,6 +143,11 @@ Generator           g             Base point G
 ```
 
 ### Group Interface
+
+> **SECURITY**: The `exponentiate` (scalar multiplication) operation must be implemented
+> in **constant-time** when the scalar is secret (e.g., private keys, nonces). Variable-time
+> implementations leak secret bits through timing side-channels. Use audited libraries
+> like libsecp256k1 or Zig's std.crypto.ecc.
 
 ```zig
 const DlogGroup = struct {
@@ -431,31 +439,33 @@ comptime {
 
 ## Summary
 
-- **secp256k1** provides the elliptic curve foundation for all Sigma cryptography
-- **Group elements** are 33 bytes (compressed SEC1 encoding)
-- **Multiplicative notation** (exponentiate, multiply) maps to additive operations
-- **SOUNDNESS_BITS = 192** is critical for protocol security
-- **DlogGroup** interface: exponentiate, multiply, inverse, identity
-- **Projective coordinates** optimize computation; normalize for encoding/comparison
+This chapter covered the elliptic curve cryptography foundation that underlies all Sigma protocol operations:
+
+- **secp256k1** (y² = x³ + 7) provides the mathematical foundation for Sigma protocols, chosen for its security properties and widespread support in Bitcoin and Ethereum tooling
+- **Group elements** are encoded as 33 bytes using compressed SEC1 format—a sign byte (0x02 or 0x03 based on Y coordinate parity) followed by the 32-byte X coordinate
+- **Multiplicative notation** used in Sigma protocol literature (g^x, g·h) maps to additive operations in typical EC libraries (scalar multiplication, point addition)
+- **SOUNDNESS_BITS = 192** determines the challenge size in Sigma protocols and must be less than the group order's bit length for security
+- The **DlogGroup interface** provides exponentiate (scalar multiplication), multiply (point addition), inverse (point negation), and identity (point at infinity)
+- **Projective coordinates** (X, Y, Z) avoid expensive field inversions during computation; conversion to affine coordinates is required only for encoding and comparison
 
 ---
 
 *Next: [Chapter 10: Hash Functions](./ch10-hash-functions.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala`
+[^1]: Scala: [`CryptoConstants.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala)
 
-[^2]: Rust: `ergo-chain-types/src/ec_point.rs:41-51`
+[^2]: Rust: [`ec_point.rs:41-51`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-chain-types/src/ec_point.rs#L41-L51)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/crypto/DlogGroup.scala`
+[^3]: Scala: [`DlogGroup.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/crypto/DlogGroup.scala)
 
-[^4]: Rust: `ergotree-ir/src/sigma_protocol/dlog_group.rs:39-84`
+[^4]: Rust: [`dlog_group.rs:39-84`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/dlog_group.rs#L39-L84)
 
-[^5]: Scala: `core/jvm/src/main/scala/sigma/crypto/Platform.scala:217-225`
+[^5]: Scala: [`Platform.scala:217-225`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/jvm/src/main/scala/sigma/crypto/Platform.scala#L217-L225)
 
-[^6]: Scala: `core/shared/src/main/scala/sigma/serialization/GroupElementSerializer.scala`
+[^6]: Scala: [`GroupElementSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/serialization/GroupElementSerializer.scala)
 
-[^7]: Rust: `ergo-chain-types/src/ec_point.rs:120-146`
+[^7]: Rust: [`ec_point.rs:120-146`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-chain-types/src/ec_point.rs#L120-L146)
 
-[^8]: Rust: `ergotree-ir/src/sigma_protocol/dlog_group.rs:40-43`
+[^8]: Rust: [`dlog_group.rs:40-43`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/dlog_group.rs#L40-L43)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala:70-75`
+[^9]: Scala: [`CryptoConstants.scala:70-75`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/crypto/CryptoConstants.scala#L70-L75)

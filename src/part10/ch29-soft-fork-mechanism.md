@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- ErgoTree structure ([Chapter 3](../part1/ch03-ergotree-structure.md))
-- Serialization ([Chapter 7](../part2/ch07-serialization.md))
-- Transaction validation ([Chapter 24](../part8/ch24-transaction-validation.md))
+- [Chapter 3](../part1/ch03-ergotree-structure.md) for ErgoTree version field and header format
+- [Chapter 7](../part3/ch07-serialization-framework.md) for serialization framework
+- [Chapter 24](../part8/ch24-transaction-validation.md) for validation rules
 
 ## Learning Objectives
 
-- Understand version context and script versioning
-- Implement validation rules with configurable status
-- Master unknown opcode handling for soft-forks
-- Work with the AOT to JIT interpreter transition
+By the end of this chapter, you will be able to:
+
+- Explain version context and how script versioning enables protocol upgrades
+- Implement validation rules with configurable status (enabled, disabled, soft-fork)
+- Handle unknown opcodes gracefully to support future soft-forks
+- Describe the transition from AOT (Ahead-of-Time) to JIT (Just-in-Time) costing
 
 ## Version Context Architecture
 
@@ -617,34 +619,34 @@ fn handleUnknownOpcode(
 
 *Next: [Chapter 30: Cross-Platform Support](./ch30-cross-platform-support.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala:17-35`
+[^1]: Scala: [`VersionContext.scala:17-35`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/VersionContext.scala#L17-L35)
 
-[^2]: Rust: `ergotree-ir/src/chain/context.rs:46-53`
+[^2]: Rust: [`context.rs:46-53`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/context.rs#L46-L53)
 
-[^3]: Scala: `core/shared/src/main/scala/sigma/ast/ErgoTree.scala` (header)
+[^3]: Scala: [`ErgoTree.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/ErgoTree.scala) (header)
 
-[^4]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:122-145`
+[^4]: Rust: [`tree_header.rs:122-145`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree/tree_header.rs#L122-L145)
 
-[^5]: Scala: `core/shared/src/main/scala/sigma/ast/ErgoTree.scala:57-84`
+[^5]: Scala: [`ErgoTree.scala:57-84`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/ast/ErgoTree.scala#L57-L84)
 
-[^6]: Rust: `ergotree-ir/src/ergo_tree/tree_header.rs:27-109`
+[^6]: Rust: [`tree_header.rs:27-109`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree/tree_header.rs#L27-L109)
 
-[^7]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala:47-56`
+[^7]: Scala: [`VersionContext.scala:47-56`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/VersionContext.scala#L47-L56)
 
-[^8]: Rust: `ergotree-ir/src/chain/context.rs:12-54`
+[^8]: Rust: [`context.rs:12-54`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/chain/context.rs#L12-L54)
 
-[^9]: Scala: `core/shared/src/main/scala/sigma/validation/RuleStatus.scala:4-53`
+[^9]: Scala: [`RuleStatus.scala:4-53`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/validation/RuleStatus.scala#L4-L53)
 
 [^10]: Rust: Not directly present in sigma-rust; validation handled at higher level
 
-[^11]: Scala: `core/shared/src/main/scala/sigma/validation/ValidationRules.scala:13-51`
+[^11]: Scala: [`ValidationRules.scala:13-51`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/validation/ValidationRules.scala#L13-L51)
 
 [^12]: Rust: Validation rules embedded in deserializer implementations
 
-[^13]: Scala: `core/shared/src/main/scala/sigma/validation/SoftForkChecker.scala:4-42`
+[^13]: Scala: [`SoftForkChecker.scala:4-42`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/validation/SoftForkChecker.scala#L4-L42)
 
 [^14]: Rust: Soft-fork handling at application level (ergo-lib)
 
-[^15]: Scala: `core/shared/src/main/scala/sigma/validation/SigmaValidationSettings.scala:45-69`
+[^15]: Scala: [`SigmaValidationSettings.scala:45-69`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/validation/SigmaValidationSettings.scala#L45-L69)
 
-[^16]: Rust: `ergo-lib/src/chain/parameters.rs` (blockchain parameters)
+[^16]: Rust: [`parameters.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/parameters.rs) (blockchain parameters)

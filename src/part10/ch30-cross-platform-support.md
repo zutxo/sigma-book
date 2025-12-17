@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Elliptic curve cryptography ([Chapter 9](../part4/ch09-elliptic-curve-cryptography.md))
-- SDK architecture ([Chapter 27](../part9/ch27-high-level-sdk.md))
-- Build systems and compilation
+- [Chapter 9](../part4/ch09-elliptic-curve-cryptography.md) for platform-specific cryptographic implementations
+- [Chapter 27](../part9/ch27-high-level-sdk.md) for SDK APIs that must work across platforms
+- Familiarity with build systems and compilation toolchains
 
 ## Learning Objectives
 
-- Understand cross-compilation architecture
-- Implement platform abstraction layers
-- Master conditional compilation for targets
-- Work with WASM and native targets
+By the end of this chapter, you will be able to:
+
+- Explain Zig's cross-compilation architecture and target selection
+- Implement platform abstraction layers for OS-specific functionality
+- Use conditional compilation (`comptime if`) for target-specific code
+- Build for WASM, native, and embedded targets from a single codebase
 
 ## Cross-Compilation Architecture
 
@@ -84,7 +86,12 @@ const Platform = struct {
 
 ## Crypto Abstraction Layer
 
-Platform-agnostic cryptography interface[^3][^4]:
+Platform-agnostic cryptography interface[^3][^4].
+
+> **SECURITY**: All implementations of cryptographic operations involving secret data
+> (scalar multiplication, HMAC with secret keys, etc.) must be **constant-time** to
+> prevent timing side-channel attacks. Use libraries that guarantee constant-time
+> behavior (e.g., libsecp256k1, Zig's std.crypto).
 
 ```zig
 const CryptoFacade = struct {
@@ -622,14 +629,14 @@ const Wallet = struct {
 
 *Next: [Chapter 31: Performance Engineering](./ch31-performance-engineering.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/crypto/CryptoFacade.scala` (abstraction)
+[^1]: Scala: [`CryptoFacade.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/crypto/CryptoFacade.scala) (abstraction)
 
 [^2]: Rust: Platform-independent design in sigma-rust crate structure
 
-[^3]: Scala: `core/jvm/src/main/scala/sigma/crypto/Platform.scala` (JVM impl)
+[^3]: Scala: [`Platform.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/jvm/src/main/scala/sigma/crypto/Platform.scala) (JVM impl)
 
-[^4]: Rust: `ergotree-interpreter/src/sigma_protocol/` (crypto operations)
+[^4]: Rust: [`sigma_protocol/`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/) (crypto operations)
 
-[^5]: Scala: `core/js/src/main/scala/sigma/crypto/Platform.scala` (JS impl)
+[^5]: Scala: [`Platform.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/js/src/main/scala/sigma/crypto/Platform.scala) (JS impl)
 
 [^6]: Rust: Feature flags in Cargo.toml for optional dependencies

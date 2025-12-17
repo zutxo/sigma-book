@@ -8,17 +8,19 @@
 
 ## Prerequisites
 
-- AST nodes ([Chapter 4](../part2/ch04-value-nodes.md))
-- Type system ([Chapter 2](../part1/ch02-type-system.md))
-- Basic understanding of parser combinators
+- [Chapter 4](../part2/ch04-value-nodes.md) for AST node types that the parser produces
+- [Chapter 2](../part1/ch02-type-system.md) for type syntax parsing
+- Familiarity with parsing concepts: tokenization, recursive descent, operator precedence
 
 ## Learning Objectives
 
-- Understand parser combinator and Pratt parsing techniques
-- Master parser module structure (lexer, grammar, expressions, types)
-- Learn operator precedence via binding power
-- Trace expression parsing from source to AST
-- Handle source position tracking for errors
+By the end of this chapter, you will be able to:
+
+- Explain parser combinator and Pratt parsing techniques used in ErgoScript
+- Navigate the parser module structure (lexer, grammar, expressions, types)
+- Implement operator precedence using binding power
+- Trace expression parsing from ErgoScript source to untyped AST
+- Handle source position tracking for meaningful error messages
 
 ## Parser Architecture
 
@@ -333,7 +335,7 @@ const Marker = struct {
 
 ## Pratt Parsing (Binding Power)
 
-Expression parsing uses Pratt parsing for operator precedence[^6][^7]:
+Expression parsing uses Pratt parsing for operator precedence[^6][^7]. This technique, introduced by Vaughan Pratt in 1973 ("Top Down Operator Precedence"), elegantly handles operator precedence and associativity through numeric "binding power" values:
 
 ```
 Binding Power Concept
@@ -845,20 +847,20 @@ fn err(p: *Parser) void {
 
 *Next: [Chapter 17: Semantic Analysis](./ch17-semantic-analysis.md)*
 
-[^1]: Scala: `parsers/shared/src/main/scala/sigmastate/lang/SigmaParser.scala`
+[^1]: Scala: [`SigmaParser.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/parsers/shared/src/main/scala/sigmastate/lang/SigmaParser.scala)
 
-[^2]: Rust: `ergoscript-compiler/src/parser.rs`
+[^2]: Rust: [`parser.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/parser.rs)
 
-[^3]: Rust: `ergoscript-compiler/src/lexer.rs`
+[^3]: Rust: [`lexer.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/lexer.rs)
 
-[^4]: Scala: `parsers/shared/src/main/scala/sigmastate/lang/parsers/Basic.scala`
+[^4]: Scala: [`Basic.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/parsers/shared/src/main/scala/sigmastate/lang/parsers/Basic.scala)
 
-[^5]: Rust: `ergoscript-compiler/src/parser/marker.rs`
+[^5]: Rust: [`marker.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/parser/marker.rs)
 
-[^6]: Scala: `parsers/shared/src/main/scala/sigmastate/lang/parsers/Exprs.scala`
+[^6]: Scala: [`Exprs.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/parsers/shared/src/main/scala/sigmastate/lang/parsers/Exprs.scala)
 
-[^7]: Rust: `ergoscript-compiler/src/parser/grammar/expr.rs:1-60`
+[^7]: Rust: [`expr.rs:1-60`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/parser/grammar/expr.rs#L1-L60)
 
-[^8]: Scala: `parsers/shared/src/main/scala/sigmastate/lang/SourceContext.scala`
+[^8]: Scala: [`SourceContext.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/parsers/shared/src/main/scala/sigmastate/lang/SourceContext.scala)
 
-[^9]: Rust: `ergoscript-compiler/src/parser/sink.rs`
+[^9]: Rust: [`sink.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergoscript-compiler/src/parser/sink.rs)

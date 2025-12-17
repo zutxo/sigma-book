@@ -8,20 +8,22 @@
 
 ## Prerequisites
 
-- Serialization framework (Chapter 7)
-- Value nodes (Chapter 4)
-- Opcodes (Chapter 5)
+- [Chapter 7](./ch07-serialization-framework.md) for VLQ encoding, type serialization, and `SigmaByteReader`/`SigmaByteWriter`
+- [Chapter 4](../part2/ch04-value-nodes.md) for the `Value` hierarchy and expression node types
+- [Chapter 5](../part2/ch05-operations-opcodes.md) for the opcode space and operation categories
 
 ## Learning Objectives
 
-- Understand opcode-based serialization dispatch
-- Implement value serializers following common patterns
-- Work with constant extraction and placeholder substitution
-- Handle type inference during deserialization
+By the end of this chapter, you will be able to:
+
+- Explain opcode-based serialization dispatch and how it enables extensibility
+- Implement value serializers following common patterns (binary, unary, nullary, collection)
+- Describe constant extraction and placeholder substitution for segregated constant trees
+- Handle type inference during deserialization using `ValDefTypeStore`
 
 ## Serialization Architecture
 
-Value serialization uses opcode dispatch to select the appropriate serializer[^1][^2]:
+Chapter 7 covered the low-level encoding primitives (VLQ, ZigZag, type codes). This chapter builds on that foundation to show how entire expression trees are serialized. The key insight is that each expression's opcode determines its serialization format, enabling a registry-based dispatch pattern that scales to hundreds of operation types[^1][^2].
 
 ```
 Expression Serialization Flow
@@ -572,37 +574,39 @@ OpCode Range    Category            Serializer Pattern
 
 ## Summary
 
-- **Opcode dispatch**: First byte determines serializer selection
-- **Constant extraction**: Constants can be inlined or placeholder-substituted
-- **Common patterns**: BinOp, Unary, Nullary, Collection serializers
-- **Type inference**: ValDefTypeStore tracks types for ValUse resolution
-- **Method calls**: Require type ID + method ID + version checking
-- **Sparse registry**: O(1) serializer lookup by opcode
+This chapter covered the value serialization system that transforms ErgoTree expression trees to and from bytes:
+
+- **Opcode dispatch** enables extensible serialization—the first byte of each expression determines which serializer handles the remaining bytes, allowing O(1) lookup via a sparse registry array
+- **Constant extraction** supports two modes: inline serialization (type + value) when constant segregation is disabled, or placeholder indices when segregation is enabled for template sharing
+- **Common serializer patterns** reduce code duplication: `BinOpSerializer` handles all two-argument operations, `UnarySerializer` handles single-input transformations, and `NullarySerializer` handles singletons where the opcode alone is sufficient
+- **Collection serializers** include bounds checking to prevent DoS attacks from maliciously large collections during deserialization
+- **Type inference** via `ValDefTypeStore` tracks variable types as `ValDef` nodes are deserialized, allowing `ValUse` nodes to recover their types without storing them redundantly
+- **Method call serialization** includes type ID, method ID, and version checking to ensure compatibility with the ErgoTree version being deserialized
 
 ---
 
 *Next: [Chapter 9: Elliptic Curve Cryptography](../part4/ch09-elliptic-curve-cryptography.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/serialization/ValueSerializer.scala:65-95`
+[^1]: Scala: [`ValueSerializer.scala:65-95`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/ValueSerializer.scala#L65-L95)
 
-[^2]: Rust: `ergotree-ir/src/serialization/expr.rs:83-203`
+[^2]: Rust: [`expr.rs:83-203`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/expr.rs#L83-L203)
 
-[^3]: Scala: `data/shared/src/main/scala/sigma/serialization/ValueSerializer.scala:50-182`
+[^3]: Scala: [`ValueSerializer.scala:50-182`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/ValueSerializer.scala#L50-L182)
 
-[^4]: Rust: `ergotree-ir/src/serialization/expr.rs:215-298`
+[^4]: Rust: [`expr.rs:215-298`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/expr.rs#L215-L298)
 
-[^5]: Scala: `data/shared/src/main/scala/sigma/serialization/ConstantSerializer.scala`
+[^5]: Scala: [`ConstantSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/ConstantSerializer.scala)
 
-[^6]: Rust: `ergotree-ir/src/serialization/constant.rs:9-29`
+[^6]: Rust: [`constant.rs:9-29`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/constant.rs#L9-L29)
 
-[^7]: Rust: `ergotree-ir/src/serialization/constant_placeholder.rs`
+[^7]: Rust: [`constant_placeholder.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/constant_placeholder.rs)
 
-[^8]: Rust: `ergotree-ir/src/serialization/bin_op.rs`
+[^8]: Rust: [`bin_op.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/bin_op.rs)
 
-[^9]: Scala: `data/shared/src/main/scala/sigma/serialization/ConcreteCollectionSerializer.scala`
+[^9]: Scala: [`ConcreteCollectionSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/ConcreteCollectionSerializer.scala)
 
-[^10]: Scala: `data/shared/src/main/scala/sigma/serialization/BlockValueSerializer.scala`
+[^10]: Scala: [`BlockValueSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/BlockValueSerializer.scala)
 
-[^11]: Scala: `data/shared/src/main/scala/sigma/serialization/MethodCallSerializer.scala`
+[^11]: Scala: [`MethodCallSerializer.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/serialization/MethodCallSerializer.scala)
 
-[^12]: Rust: `ergotree-ir/src/serialization/method_call.rs:19-60`
+[^12]: Rust: [`method_call.rs:19-60`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/serialization/method_call.rs#L19-L60)

@@ -587,8 +587,12 @@ _ = watch_only.deriveChild(ChildIndex.hardened(0), allocator) catch |err| {
 Key Derivation Security
 ══════════════════════════════════════════════════════════════════
 
-Attack: Child + Chain Code → Parent
-────────────────────────────────────
+Attack: Child + Chain Code → Parent  ⚠️ PRACTICAL ATTACK
+────────────────────────────────────────────────────────
+This is NOT theoretical - a single compromised child key
+(via malware, hardware fault, or insider threat) can
+recover the entire account if normal derivation was used.
+
 Given:
   - Child private key k_i
   - Parent chain code c
@@ -625,38 +629,38 @@ Recommendation:
 
 *Next: [Chapter 29: Soft Fork Mechanism](../part10/ch29-soft-fork-mechanism.md)*
 
-[^1]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala`
+[^1]: Scala: [`ExtendedSecretKey.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala)
 
-[^2]: Rust: `ergo-lib/src/wallet/ext_secret_key.rs:29-37`
+[^2]: Rust: [`ext_secret_key.rs:29-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/ext_secret_key.rs#L29-L37)
 
-[^3]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/Index.scala:5-16`
+[^3]: Scala: [`Index.scala:5-16`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/Index.scala#L5-L16)
 
-[^4]: Rust: `ergo-lib/src/wallet/derivation_path.rs:15-131`
+[^4]: Rust: [`derivation_path.rs:15-131`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/derivation_path.rs#L15-L131)
 
-[^5]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/DerivationPath.scala:10-29`
+[^5]: Scala: [`DerivationPath.scala:10-29`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/DerivationPath.scala#L10-L29)
 
-[^6]: Rust: `ergo-lib/src/wallet/derivation_path.rs:133-204`
+[^6]: Rust: [`derivation_path.rs:133-204`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/derivation_path.rs#L133-L204)
 
-[^7]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/Constants.scala:31-36`
+[^7]: Scala: [`Constants.scala:31-36`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/Constants.scala#L31-L36)
 
-[^8]: Rust: `ergo-lib/src/wallet/derivation_path.rs:88-91` (PURPOSE, ERG, CHANGE constants)
+[^8]: Rust: [`derivation_path.rs:88-91`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/derivation_path.rs#L88-L91) (PURPOSE, ERG, CHANGE constants)
 
-[^9]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala:13-49`
+[^9]: Scala: [`ExtendedSecretKey.scala:13-49`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala#L13-L49)
 
-[^10]: Rust: `ergo-lib/src/wallet/ext_secret_key.rs:60-112`
+[^10]: Rust: [`ext_secret_key.rs:60-112`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/ext_secret_key.rs#L60-L112)
 
-[^11]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala:53-78`
+[^11]: Scala: [`ExtendedSecretKey.scala:53-78`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedSecretKey.scala#L53-L78)
 
-[^12]: Rust: `ergo-lib/src/wallet/ext_secret_key.rs:114-163`
+[^12]: Rust: [`ext_secret_key.rs:114-163`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/ext_secret_key.rs#L114-L163)
 
-[^13]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedPublicKey.scala:46-59`
+[^13]: Scala: [`ExtendedPublicKey.scala:46-59`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/ExtendedPublicKey.scala#L46-L59)
 
-[^14]: Rust: `ergo-lib/src/wallet/ext_pub_key.rs`
+[^14]: Rust: [`ext_pub_key.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/ext_pub_key.rs)
 
-[^15]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/JavaHelpers.scala:282-301`
+[^15]: Scala: [`JavaHelpers.scala:282-301`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/JavaHelpers.scala#L282-L301)
 
-[^16]: Rust: `ergo-lib/src/wallet/mnemonic.rs:20-37`
+[^16]: Rust: [`mnemonic.rs:20-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/mnemonic.rs#L20-L37)
 
-[^17]: Scala: `sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/DerivationPath.scala:133-147`
+[^17]: Scala: [`DerivationPath.scala:133-147`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/sdk/shared/src/main/scala/org/ergoplatform/sdk/wallet/secrets/DerivationPath.scala#L133-L147)
 
-[^18]: Rust: `ergo-lib/src/wallet/derivation_path.rs:235-241` (ledger_bytes)
+[^18]: Rust: [`derivation_path.rs:235-241`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/derivation_path.rs#L235-L241) (ledger_bytes)

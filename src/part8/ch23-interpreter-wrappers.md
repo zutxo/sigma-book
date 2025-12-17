@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Interpreter architecture ([Chapter 14](../part5/ch14-sigma-interpreter-architecture.md))
-- Prover architecture ([Chapter 15](../part5/ch15-prover-architecture.md))
-- Box model ([Chapter 22](../part7/ch22-box-model.md))
+- [Chapter 14](../part5/ch14-verifier-implementation.md) for verifier implementation
+- [Chapter 15](../part5/ch15-prover-implementation.md) for prover implementation
+- [Chapter 22](../part7/ch22-box-model.md) for box structure and registers
 
 ## Learning Objectives
 
-- Understand the interpreter hierarchy
-- Learn storage rent rules for expired boxes
-- Master transaction signing with the Wallet API
-- Implement proof verification
+By the end of this chapter, you will be able to:
+
+- Explain the interpreter hierarchy and how verifier/prover are combined
+- Describe storage rent rules for expired boxes
+- Use the Wallet API for transaction signing
+- Implement proof verification with context extensions
 
 ## Interpreter Architecture
 
@@ -481,12 +483,12 @@ Boxes expire after ~4 years and can be spent by anyone[^19]:
 Storage Rent Rules
 ─────────────────────────────────────────────────────
 
-Period: 262,144 blocks ≈ 4 years (at 2 min/block)
+Period: 1,051,200 blocks ≈ 4 years (at 2 min/block)
 
 Expired Box Spending:
 ┌─────────────────────────────────────────────────────┐
 │ IF:                                                 │
-│   current_height - box.creation_height >= 262,144   │
+│   current_height - box.creation_height >= 1,051,200 │
 │   AND proof.isEmpty()                               │
 │   AND extension.contains(STORAGE_INDEX_VAR)         │
 │ THEN:                                               │
@@ -507,8 +509,8 @@ Recreation Rules:
 
 ```zig
 const StorageConstants = struct {
-    /// Storage period in blocks (~4 years)
-    pub const STORAGE_PERIOD: u32 = 262_144;
+    /// Storage period in blocks (~4 years at 2 min/block)
+    pub const STORAGE_PERIOD: u32 = 1_051_200;
     /// Context extension variable ID for storage index
     pub const STORAGE_INDEX_VAR_ID: u8 = 127;
     /// Fixed cost for storage contract evaluation
@@ -648,46 +650,46 @@ pub fn generateDeterministicCommitments(
 
 *Next: [Chapter 24: Transaction Validation](./ch24-transaction-validation.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/org/ergoplatform/ErgoLikeInterpreter.scala`
+[^1]: Scala: [`ErgoLikeInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/org/ergoplatform/ErgoLikeInterpreter.scala)
 
-[^2]: Rust: `ergotree-interpreter/src/eval.rs:1-50`
+[^2]: Rust: [`eval.rs:1-50`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs#L1-L50)
 
-[^3]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala` (reduce)
+[^3]: Scala: [`Interpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala) (reduce)
 
-[^4]: Rust: `ergotree-interpreter/src/eval.rs:129-160`
+[^4]: Rust: [`eval.rs:129-160`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval.rs#L129-L160)
 
-[^5]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala` (verify)
+[^5]: Scala: [`Interpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/Interpreter.scala) (verify)
 
-[^6]: Rust: `ergotree-interpreter/src/sigma_protocol/verifier.rs:55-88`
+[^6]: Rust: [`verifier.rs:55-88`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/verifier.rs#L55-L88)
 
-[^7]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala`
+[^7]: Scala: [`ProverInterpreter.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverInterpreter.scala)
 
-[^8]: Rust: `ergotree-interpreter/src/sigma_protocol/prover.rs:57-96`
+[^8]: Rust: [`prover.rs:57-96`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/prover.rs#L57-L96)
 
-[^9]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/ProverResult.scala`
+[^9]: Scala: [`ProverResult.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/ProverResult.scala)
 
-[^10]: Rust: `ergo-lib/src/chain/transaction/input/prover_result.rs:14-50`
+[^10]: Rust: [`prover_result.rs:14-50`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/transaction/input/prover_result.rs#L14-L50)
 
-[^11]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala`
+[^11]: Scala: [`ErgoProvingInterpreter.scala`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala)
 
-[^12]: Rust: `ergo-lib/src/wallet.rs:52-94`
+[^12]: Rust: [`wallet.rs:52-94`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L52-L94)
 
-[^13]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala:100-159`
+[^13]: Scala: [`ErgoProvingInterpreter.scala:100-159`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala#L100-L159)
 
-[^14]: Rust: `ergo-lib/src/wallet/signing.rs:143-180`
+[^14]: Rust: [`signing.rs:143-180`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/signing.rs#L143-L180)
 
-[^15]: Scala: `interpreter/shared/src/main/scala/sigmastate/interpreter/HintsBag.scala`
+[^15]: Scala: [`HintsBag.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/interpreter/HintsBag.scala)
 
-[^16]: Rust: `ergo-lib/src/wallet.rs:259-347`
+[^16]: Rust: [`wallet.rs:259-347`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L259-L347)
 
-[^17]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala:190-217`
+[^17]: Scala: [`ErgoProvingInterpreter.scala:190-217`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoProvingInterpreter.scala#L190-L217)
 
-[^18]: Rust: `ergo-lib/src/wallet.rs:124-158`
+[^18]: Rust: [`wallet.rs:124-158`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L124-L158)
 
-[^19]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala:42-55`
+[^19]: Scala: [`ErgoInterpreter.scala:42-55`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala#L42-L55)
 
-[^20]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala:93-96`
+[^20]: Scala: [`ErgoInterpreter.scala:93-96`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/ErgoInterpreter.scala#L93-L96)
 
-[^21]: Rust: `ergo-lib/src/wallet.rs:182-209`
+[^21]: Rust: [`wallet.rs:182-209`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L182-L209)
 
-[^22]: Rust: `ergo-lib/src/wallet/deterministic.rs`
+[^22]: Rust: [`deterministic.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/deterministic.rs)

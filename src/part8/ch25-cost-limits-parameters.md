@@ -8,15 +8,17 @@
 
 ## Prerequisites
 
-- Transaction validation ([Chapter 24](./ch24-transaction-validation.md))
-- Cost model ([Chapter 13](../part5/ch13-cost-model.md))
+- [Chapter 24](./ch24-transaction-validation.md) for how cost limits are enforced during validation
+- [Chapter 13](../part5/ch13-cost-model.md) for JitCost and operation costs
 
 ## Learning Objectives
 
-- Understand Ergo's adjustable blockchain parameters
-- Learn the voting mechanism for parameter changes
-- Master cost-related parameters and defaults
-- Understand validation rules configurability
+By the end of this chapter, you will be able to:
+
+- Explain Ergo's adjustable blockchain parameters and their governance
+- Describe the miner voting mechanism for parameter changes
+- Work with cost-related parameters and their default values
+- Configure validation rules and soft-fork settings
 
 ## Parameter System
 
@@ -600,18 +602,18 @@ pub fn parseExtension(height: u32, extension: *const Extension) !Parameters {
 
 *Next: [Chapter 26: Wallet and Signing](./ch26-wallet-signing.md)*
 
-[^1]: Scala: `ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala:23-26`
+[^1]: Scala: [`Parameters.scala:23-26`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala#L23-L26)
 
-[^2]: Rust: `ergo-lib/src/chain/parameters.rs:8-27`
+[^2]: Rust: [`parameters.rs:8-27`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/parameters.rs#L8-L27)
 
-[^3]: Scala: `ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala:190-217`
+[^3]: Scala: [`Parameters.scala:190-217`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala#L190-L217)
 
-[^4]: Scala: `ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala:159-183`
+[^4]: Scala: [`Parameters.scala:159-183`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala#L159-L183)
 
-[^5]: Scala: `ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala:370-374`
+[^5]: Scala: [`ErgoTransaction.scala:370-374`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/modifiers/mempool/ErgoTransaction.scala#L370-L374)
 
-[^6]: Rust: `ergo-lib/src/chain/parameters.rs:62-77`
+[^6]: Rust: [`parameters.rs:62-77`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/chain/parameters.rs#L62-L77)
 
-[^7]: Scala: `ergo-core/src/main/scala/org/ergoplatform/settings/ValidationRules.scala:234-327`
+[^7]: Scala: [`ValidationRules.scala:234-327`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/settings/ValidationRules.scala#L234-L327)
 
-[^8]: Scala: `ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala:220-228`
+[^8]: Scala: [`Parameters.scala:220-228`](https://github.com/ergoplatform/ergo/blob/master/ergo-core/src/main/scala/org/ergoplatform/settings/Parameters.scala#L220-L228)

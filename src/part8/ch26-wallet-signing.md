@@ -8,16 +8,18 @@
 
 ## Prerequisites
 
-- Prover architecture ([Chapter 15](../part5/ch15-prover-architecture.md))
-- Interpreter wrappers ([Chapter 23](./ch23-interpreter-wrappers.md))
-- Sigma protocols ([Chapter 11](../part4/ch11-sigma-protocols.md))
+- [Chapter 15](../part5/ch15-prover-implementation.md) for proof generation
+- [Chapter 23](./ch23-interpreter-wrappers.md) for interpreter integration
+- [Chapter 11](../part4/ch11-sigma-protocols.md) for hint system and distributed signing
 
 ## Learning Objectives
 
-- Understand wallet service architecture
-- Master transaction signing flow
-- Learn distributed signing with TransactionHintsBag
-- Implement box selection for transactions
+By the end of this chapter, you will be able to:
+
+- Explain the wallet service architecture and its role in transaction signing
+- Trace the complete transaction signing flow from unsigned to signed
+- Use `TransactionHintsBag` for distributed multi-party signing
+- Implement box selection strategies for building transactions
 
 ## Wallet Architecture
 
@@ -640,20 +642,20 @@ const final_tx = try wallet_b.signTransaction(&tx_context, &state_context, &fina
 
 *Next: [Chapter 27: High-Level SDK](../part9/ch27-high-level-sdk.md)*
 
-[^1]: Scala: `ergo/src/main/scala/org/ergoplatform/nodeView/wallet/ErgoWalletService.scala:36-61`
+[^1]: Scala: [`ErgoWalletService.scala:36-61`](https://github.com/ergoplatform/ergo/blob/master/ergo/src/main/scala/org/ergoplatform/nodeView/wallet/ErgoWalletService.scala#L36-L61)
 
-[^2]: Rust: `ergo-lib/src/wallet.rs:52-93`
+[^2]: Rust: [`wallet.rs:52-93`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L52-L93)
 
-[^3]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/mnemonic/Mnemonic.scala`
+[^3]: Scala: [`Mnemonic.scala`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/mnemonic/Mnemonic.scala)
 
-[^4]: Rust: `ergo-lib/src/wallet/mnemonic.rs:20-37`
+[^4]: Rust: [`mnemonic.rs:20-37`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/mnemonic.rs#L20-L37)
 
-[^5]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/TransactionHintsBag.scala:5-56`
+[^5]: Scala: [`TransactionHintsBag.scala:5-56`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/interpreter/TransactionHintsBag.scala#L5-L56)
 
-[^6]: Rust: `ergo-lib/src/wallet.rs:259-347`
+[^6]: Rust: [`wallet.rs:259-347`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet.rs#L259-L347)
 
-[^7]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/boxes/BoxSelector.scala`
+[^7]: Scala: [`BoxSelector.scala`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/boxes/BoxSelector.scala)
 
-[^8]: Rust: `ergo-lib/src/wallet/box_selector.rs:34-46`
+[^8]: Rust: [`box_selector.rs:34-46`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergo-lib/src/wallet/box_selector.rs#L34-L46)
 
-[^9]: Scala: `ergo-wallet/src/main/scala/org/ergoplatform/wallet/boxes/ErgoBoxAssetExtractor.scala:55-65`
+[^9]: Scala: [`ErgoBoxAssetExtractor.scala:55-65`](https://github.com/ergoplatform/ergo/blob/master/ergo-wallet/src/main/scala/org/ergoplatform/wallet/boxes/ErgoBoxAssetExtractor.scala#L55-L65)

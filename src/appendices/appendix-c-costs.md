@@ -365,6 +365,6 @@ fn calculateTxCost(
 
 *[Previous: Appendix B](./appendix-b-opcodes.md) | [Next: Appendix D](./appendix-d-methods.md)*
 
-[^1]: Scala: `data/shared/src/main/scala/sigma/ast/CostKind.scala`
+[^1]: Scala: [`CostKind.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/data/shared/src/main/scala/sigma/ast/CostKind.scala)
 
-[^2]: Rust: `ergotree-interpreter/src/eval/cost_accum.rs:7-43`
+[^2]: Rust: [`cost_accum.rs:7-43`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/eval/cost_accum.rs#L7-L43)

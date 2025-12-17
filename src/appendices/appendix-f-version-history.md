@@ -271,6 +271,6 @@ These tests verify:
 
 *[Previous: Appendix E](./appendix-e-serialization.md) | [Back to Book](../SUMMARY.md)*
 
-[^1]: Scala: `core/shared/src/main/scala/sigma/VersionContext.scala`
+[^1]: Scala: [`VersionContext.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/VersionContext.scala)
 
-[^2]: Rust: `ergotree-ir/src/ergo_tree.rs` (ErgoTreeVersion)
+[^2]: Rust: [`ergo_tree.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/ergo_tree.rs) (ErgoTreeVersion)

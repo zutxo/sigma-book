@@ -8,18 +8,23 @@
 
 ## Prerequisites
 
-- Elliptic curve cryptography ([Chapter 9](./ch09-elliptic-curve-cryptography.md))
-- Hash functions ([Chapter 10](./ch10-hash-functions.md))
-- Discrete logarithm problem
+- [Chapter 9](./ch09-elliptic-curve-cryptography.md) for elliptic curve operations and the discrete logarithm problem
+- [Chapter 10](./ch10-hash-functions.md) for Fiat-Shamir hash generation
+- Understanding of zero-knowledge proofs: proving knowledge without revealing secrets
 
 ## Learning Objectives
 
-- Understand three-move Sigma protocol structure
-- Implement Schnorr (DLog) and Diffie-Hellman Tuple protocols
-- Master protocol composition (AND, OR, THRESHOLD)
-- Apply Fiat-Shamir transformation for non-interactive proofs
+By the end of this chapter, you will be able to:
+
+- Explain the three-move Sigma protocol structure (commitment, challenge, response)
+- Implement the Schnorr (DLog) protocol for proving knowledge of a discrete logarithm
+- Describe the Diffie-Hellman Tuple protocol for proving equality of discrete logs
+- Compose protocols using AND, OR, and THRESHOLD operations
+- Apply the Fiat-Shamir transformation to convert interactive proofs to non-interactive
 
 ## Sigma Protocol Structure
+
+Sigma (Σ) protocols are the cryptographic foundation that makes Ergo's smart contracts possible. Named for their characteristic three-move "sigma-shaped" structure, they enable a prover to convince a verifier that they know a secret without revealing anything about that secret—the defining property of zero-knowledge proofs.
 
 A Sigma protocol is a three-move interactive proof[^1][^2]:
 
@@ -575,43 +580,45 @@ Special Sound.   Two transcripts extract secret
 
 ## Summary
 
-- **Sigma protocols** are three-move (commitment, challenge, response) proofs
-- **Schnorr** proves knowledge of discrete log: `h = g^w`
-- **DHT** proves equality of discrete logs across two bases
-- **AND** uses same challenge for all children
-- **OR** distributes challenges via XOR constraint
-- **THRESHOLD** uses GF(2^192) polynomial interpolation
-- **Simulation** enables OR/threshold without knowing all secrets
-- **Fiat-Shamir** derives challenge from hash of commitments
+This chapter covered Sigma protocols—the zero-knowledge proof system that forms the cryptographic core of Ergo's smart contracts:
+
+- **Sigma protocols** use a three-move structure: the prover sends a commitment, receives a challenge, and responds with a value that proves knowledge without revealing the secret
+- **Schnorr (DLog) protocol** proves knowledge of a discrete logarithm: given h = g^w, prove knowledge of w without revealing it
+- **Diffie-Hellman Tuple protocol** proves equality of discrete logs across different bases: given u = g^w and v = h^w, prove that u and v share the same discrete log
+- **AND composition** applies the same challenge to all children—all must be proven
+- **OR composition** distributes challenges via XOR constraint—only one child needs a real proof, others are simulated
+- **THRESHOLD (k-of-n)** uses GF(2^192) polynomial interpolation to distribute challenges, requiring k real proofs
+- **Simulation** generates valid-looking transcripts without knowing secrets, enabling OR and threshold compositions
+- **Fiat-Shamir transformation** makes interactive protocols non-interactive by deriving the challenge from a hash of the commitments
 
 ---
 
 *Next: [Chapter 12: Evaluation Model](../part5/ch12-evaluation-model.md)*
 
-[^1]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/SigmaProtocolFunctions.scala`
+[^1]: Scala: [`SigmaProtocolFunctions.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/SigmaProtocolFunctions.scala)
 
-[^2]: Rust: `ergotree-interpreter/src/sigma_protocol.rs`
+[^2]: Rust: [`sigma_protocol.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol.rs)
 
-[^3]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/DLogProtocol.scala`
+[^3]: Scala: [`DLogProtocol.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/DLogProtocol.scala)
 
-[^4]: Rust: `ergotree-interpreter/src/sigma_protocol/dlog_protocol.rs:10-47`
+[^4]: Rust: [`dlog_protocol.rs:10-47`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/dlog_protocol.rs#L10-L47)
 
-[^5]: Rust: `ergotree-interpreter/src/sigma_protocol/dlog_protocol.rs:73-93`
+[^5]: Rust: [`dlog_protocol.rs:73-93`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/dlog_protocol.rs#L73-L93)
 
-[^6]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/DiffieHellmanTupleProtocol.scala`
+[^6]: Scala: [`DiffieHellmanTupleProtocol.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/DiffieHellmanTupleProtocol.scala)
 
-[^7]: Rust: `ergotree-interpreter/src/sigma_protocol/dht_protocol.rs`
+[^7]: Rust: [`dht_protocol.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/dht_protocol.rs)
 
-[^8]: Scala: `core/shared/src/main/scala/sigma/data/SigmaBoolean.scala`
+[^8]: Scala: [`SigmaBoolean.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/core/shared/src/main/scala/sigma/data/SigmaBoolean.scala)
 
-[^9]: Rust: `ergotree-ir/src/sigma_protocol/sigma_boolean.rs:31-96`
+[^9]: Rust: [`sigma_boolean.rs:31-96`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/sigma_boolean.rs#L31-L96)
 
-[^10]: Rust: `ergotree-ir/src/sigma_protocol/sigma_boolean/cand.rs`
+[^10]: Rust: [`cand.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/sigma_boolean/cand.rs)
 
-[^11]: Rust: `ergotree-ir/src/sigma_protocol/sigma_boolean/cor.rs`
+[^11]: Rust: [`cor.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-ir/src/sigma_protocol/sigma_boolean/cor.rs)
 
-[^12]: Scala: `interpreter/shared/src/main/scala/sigmastate/crypto/GF2_192_Poly.scala`
+[^12]: Scala: [`GF2_192_Poly.scala`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/interpreter/shared/src/main/scala/sigmastate/crypto/GF2_192_Poly.scala)
 
-[^13]: Rust: `ergotree-interpreter/src/sigma_protocol/unproven_tree.rs`
+[^13]: Rust: [`unproven_tree.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/unproven_tree.rs)
 
-[^14]: Rust: `ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs`
+[^14]: Rust: [`fiat_shamir.rs`](https://github.com/ergoplatform/sigma-rust/blob/develop/ergotree-interpreter/src/sigma_protocol/fiat_shamir.rs)
