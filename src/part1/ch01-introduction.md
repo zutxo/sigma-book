@@ -208,6 +208,7 @@ const Box = struct {
 ```
 
 ## The Prover/Verifier Model
+TODO: Add explainations.
 
 ```
                 PROVER                              VERIFIER
@@ -236,7 +237,7 @@ const Box = struct {
 ```
 
 ### Prover
-
+TODO: Add explainations.
 ```zig
 const Prover = struct {
     secrets: []const SecretKey,
@@ -256,7 +257,7 @@ const Prover = struct {
 ```
 
 ### Verifier
-
+TODO: Add explainations.
 ```zig
 const Verifier = struct {
     cost_limit: u64,

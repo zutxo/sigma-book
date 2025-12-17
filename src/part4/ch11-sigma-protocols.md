@@ -482,6 +482,18 @@ const GF2_192_Poly = struct {
 // constant-time to prevent timing side-channel attacks. See ZIGMA_STYLE.md.
 ```
 
+> **Mathematical correctness of GF(2^192) polynomial interpolation**:
+>
+> The threshold k-of-n scheme uses polynomial interpolation over the finite field GF(2^192):
+>
+> 1. **Field properties**: GF(2^192) is a finite field where addition is XOR and multiplication is polynomial multiplication modulo an irreducible polynomial (x^192 + x^7 + x^2 + x + 1). All arithmetic is well-defined and invertible.
+>
+> 2. **Lagrange interpolation**: Given any k distinct points (x₁, y₁), ..., (xₖ, yₖ), there exists a *unique* polynomial p(x) of degree at most k-1 passing through all points. This is constructed using Lagrange basis polynomials.
+>
+> 3. **Challenge distribution**: The prover constructs a polynomial of degree n-k with p(0) = root_challenge. Simulated children's challenges are assigned randomly, and the polynomial is interpolated through these points. Real children receive challenges p(i) computed from this polynomial.
+>
+> 4. **Security**: The 192-bit field size matches SOUNDNESS_BITS, ensuring that a cheating prover (who knows fewer than k secrets) succeeds with probability at most 2^-192—cryptographically negligible.
+
 ## Proof Trees
 
 Track proof state during proving[^13]:

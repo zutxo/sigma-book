@@ -82,6 +82,7 @@
 - [Chapter 29: Soft-Fork Mechanism](./part10/ch29-soft-fork-mechanism.md)
 - [Chapter 30: Cross-Platform Support](./part10/ch30-cross-platform-support.md)
 - [Chapter 31: Performance Engineering](./part10/ch31-performance-engineering.md)
+- [Chapter 32: v6 Protocol Features](./part10/ch32-v6-protocol-features.md)
 
 ---
 

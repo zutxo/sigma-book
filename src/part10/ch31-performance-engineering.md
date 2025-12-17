@@ -528,7 +528,7 @@ const Vec4 = @Vector(4, u64);
 
 ---
 
-*Next: [Appendix A: Type Codes](../appendices/appendix-a-type-codes.md)*
+*Next: [Chapter 32: v6 Protocol Features](./ch32-v6-protocol-features.md)*
 
 [^1]: Scala: [`perf-style-guide.md`](https://github.com/ScorexFoundation/sigmastate-interpreter/blob/develop/docs/perf-style-guide.md) (HOTSPOT patterns)
 

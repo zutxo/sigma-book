@@ -214,27 +214,25 @@ fn validateTokenBalance(self: *TxBuilder, outputs: []const ErgoBoxCandidate) !vo
     const output_tokens = try sumTokens(outputs, self.allocator);
     defer output_tokens.deinit();
 
-    // First input's box ID can be minted as new token
+    // Token minting rule: new tokens can ONLY have token_id == first_input.box_id
+    // You can mint any AMOUNT of this token type, but only ONE token type per tx.
     const first_input_id = TokenId.fromBoxId(self.box_selection.boxes.items[0].box_id);
 
-    // Filter out minted token from outputs
-    var minted_count: usize = 0;
+    // Separate minted tokens (first_input_id) from transferred tokens
+    var has_minted_token = false;
     var output_without_minted = std.AutoHashMap(TokenId, TokenAmount).init(self.allocator);
     defer output_without_minted.deinit();
 
     var iter = output_tokens.iterator();
     while (iter.next()) |entry| {
         if (entry.key_ptr.*.eql(first_input_id)) {
-            minted_count += 1;
+            has_minted_token = true;
+            // Note: any amount is allowed for the minted token
         } else {
             try output_without_minted.put(entry.key_ptr.*, entry.value_ptr.*);
         }
     }
-
-    // Can only mint one token per transaction
-    if (minted_count > 1) {
-        return error.CannotMintMultipleTokens;
-    }
+    _ = has_minted_token; // Used for documentation; actual validation is below
 
     // Check all output tokens exist in inputs
     var out_iter = output_without_minted.iterator();
