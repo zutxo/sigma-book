@@ -56,7 +56,7 @@ Performance Targets:
 
 ## Comptime Optimization
 
-Zig's comptime enables zero-cost abstractions:
+Zig's comptime enables zero-cost abstractions[^5][^6]:
 
 ```zig
 /// Compile-time type dispatch eliminates runtime branching
@@ -245,7 +245,7 @@ fn sumValues(values: []const i64) i64 {
 
 ## Memoization
 
-Cache expensive computations:
+Cache expensive computations[^3][^4]:
 
 ```zig
 /// Generic memoization with comptime key type
